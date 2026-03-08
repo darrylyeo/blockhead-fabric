@@ -7,6 +7,7 @@
 		"service:ingest": "tsx src/ingest/index.ts",
 		"service:projection": "tsx src/projection/index.ts",
 		"service:publisher": "tsx src/publisher/index.ts",
+		"service:lasso": "tsx src/provider/localLasso.ts",
 		"service:fabric:up": "docker compose --env-file src/fabric-server/.env -f src/fabric-server/docker-compose.yml up --build -d",
 		"service:fabric:down": "docker compose --env-file src/fabric-server/.env -f src/fabric-server/docker-compose.yml down",
 		"service:fabric:logs": "docker compose --env-file src/fabric-server/.env -f src/fabric-server/docker-compose.yml logs -f",
