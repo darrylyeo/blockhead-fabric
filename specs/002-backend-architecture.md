@@ -4,7 +4,7 @@
 
 Define the concrete backend implementation for a blockchain-synced Fabric server that:
 
-- ingests Ethereum mainnet from `wss://mainnet.rpc.buidlguidl.com`
+- ingests Ethereum mainnet from execution node provider via `RPC_WSS_URL`
 - maintains a replayable canonical chain journal
 - projects chain data into spatial-fabric entities
 - publishes that projected state into an RP1-compatible Fabric server
@@ -30,7 +30,7 @@ The fourth is initially the existing RP1-compatible server stack, using the loca
 ## System Topology
 
 ```text
-wss://mainnet.rpc.buidlguidl.com
+wss://... (execution node)
   -> ingest-service
   -> postgres chain journal
   -> projection-service
@@ -96,7 +96,7 @@ There are two primary data flows:
 
 ### Canonical chain ingest flow
 
-1. the provider adapter issues JSON-RPC requests over `wss://mainnet.rpc.buidlguidl.com`
+1. the provider adapter issues JSON-RPC requests over `wss://... (execution node)`
 2. Voltaire `BlockStream` emits canonical `blocks` or `reorg` events
 3. `ingest-service` normalizes the event into block, tx, receipt, log, account, and contract records
 4. `ingest-service` commits those records into Postgres
@@ -281,11 +281,11 @@ This client-visible behavior is part of the architecture, not only a rendering c
 
 Implement a project-owned provider module:
 
-- `src/provider/createBuidlGuidlWsProvider.ts`
+- `src/provider/createWsProvider.ts`
 
 Responsibilities:
 
-- open a WebSocket connection to `wss://mainnet.rpc.buidlguidl.com`
+- open a WebSocket connection to `wss://... (execution node)`
 - expose EIP-1193 `request({ method, params })`
 - multiplex concurrent request IDs safely
 - support reconnect with bounded retry
@@ -375,7 +375,7 @@ Main loop:
 Required environment:
 
 - `CHAIN_ID=1`
-- `RPC_WSS_URL=wss://mainnet.rpc.buidlguidl.com`
+- `RPC_WSS_URL=wss://... (execution node)`
 - `DATABASE_URL=postgres://...`
 - `BLOCKSTREAM_POLLING_INTERVAL_MS=1000`
 - `FINALITY_DEPTH=64`
@@ -394,7 +394,7 @@ Optional:
 Use:
 
 ```ts
-const provider = createBuidlGuidlWsProvider(config.rpcUrl)
+const provider = createWsProvider(config)
 const stream = BlockStream({ provider })
 ```
 
@@ -983,7 +983,7 @@ Recommended project-owned layout:
 ```text
 src/
   provider/
-    createBuidlGuidlWsProvider.ts
+    createWsProvider.ts
     probeCapabilities.ts
   ingest/
     index.ts
@@ -1093,7 +1093,7 @@ Response:
 
 The backend is ready for the first end-to-end demo when:
 
-- it ingests live mainnet blocks from `wss://mainnet.rpc.buidlguidl.com`
+- it ingests live mainnet blocks from `wss://... (execution node)`
 - it survives disconnects and resumes from Postgres checkpoints
 - it handles at least a 6-block reorg correctly
 - it publishes a visible `latest-spine` entrypoint into `localhost:2000`
@@ -1120,7 +1120,7 @@ The backend is ready for the first end-to-end demo when:
 
 ## Immediate Build Order
 
-1. implement `createBuidlGuidlWsProvider()`
+1. implement `createWsProvider()`
 2. implement startup capability probing
 3. create journal migrations
 4. implement `ingest-service`
@@ -1131,7 +1131,7 @@ The backend is ready for the first end-to-end demo when:
 
 ## Implementation Status
 
-- [x] Provider adapter (`createBuidlGuidlWsProvider`, EIP-1193 over WebSocket)
+- [x] Provider adapter (`createWsProvider`, EIP-1193 over WebSocket)
 - [x] Capability probe (`probeCapabilities`, `rpc_capabilities` table)
 - [x] Chain journal migrations (`ingest_checkpoints`, `projection_jobs`, canonical columns)
 - [x] Ingest service (WS/HTTP, probe, checkpoints, projection job enqueue)

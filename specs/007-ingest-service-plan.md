@@ -6,7 +6,7 @@ Define the concrete ingest-service plan for Ethereum mainnet.
 
 This service is responsible for:
 
-- connecting to `wss://mainnet.rpc.buidlguidl.com`
+- connecting to execution node via `RPC_WSS_URL`
 - probing provider capabilities
 - running Voltaire `BlockStream` backfill and watch loops
 - persisting canonical chain facts into Postgres
@@ -59,7 +59,7 @@ V1 supports:
 Required:
 
 - Postgres
-- WebSocket access to `wss://mainnet.rpc.buidlguidl.com`
+- WebSocket access to execution node provider
 - Voltaire `BlockStream`
 
 Optional later:
@@ -72,7 +72,7 @@ Optional later:
 ### Required environment
 
 - `CHAIN_ID=1`
-- `RPC_WSS_URL=wss://mainnet.rpc.buidlguidl.com`
+- `RPC_WSS_URL=wss://...` (execution node provider)
 - `DATABASE_URL=postgres://...`
 - `BLOCKSTREAM_POLLING_INTERVAL_MS=1000`
 - `FINALITY_DEPTH=64`

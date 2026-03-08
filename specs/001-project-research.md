@@ -6,7 +6,7 @@ Build a live, reorg-aware visualization of Ethereum mainnet as an Open Metaverse
 
 The system should:
 
-- ingest canonical chain data from `wss://mainnet.rpc.buidlguidl.com`
+- ingest canonical chain data from execution node provider
 - use Voltaire `BlockStream` as the primary live block ingestion primitive
 - map blockchain-native entities into RP1 / OMB spatial-fabric structures instead of inventing a separate public scene protocol
 - publish the resulting world through the current Fabric server model, with the local dev target at `http://localhost:2000`
@@ -197,7 +197,7 @@ Ethereum JSON-RPC
 
 Initial prototype endpoint:
 
-- `wss://mainnet.rpc.buidlguidl.com`
+- `RPC_WSS_URL`
 
 ### Required provider shape
 
@@ -209,7 +209,7 @@ That means the project should expose a provider object with at least:
 
 Recommended implementation:
 
-1. create a project-owned WebSocket EIP-1193 adapter for `wss://mainnet.rpc.buidlguidl.com`
+1. create a project-owned WebSocket EIP-1193 adapter for `RPC_WSS_URL`
 2. pass that provider into Voltaire `BlockStream` and any direct request builders
 3. if later needed, add a second provider for HTTP bulk reads and keep the same ingest architecture
 
@@ -413,7 +413,7 @@ Current upstream docs/source support resource references and explicit descriptor
 
 Responsibilities:
 
-- connect to `wss://mainnet.rpc.buidlguidl.com`
+- connect to `RPC_WSS_URL`
 - create a Voltaire-compatible provider
 - run `BlockStream.backfill()` on cold start or repair
 - run `BlockStream.watch()` for live updates
@@ -466,7 +466,7 @@ Recommended ingest loop:
 ### Minimal reference shape
 
 ```ts
-const provider = createBuidlGuidlWsProvider('wss://mainnet.rpc.buidlguidl.com')
+const provider = createWsProvider({ url: config.rpcWssUrl, ... })
 const stream = BlockStream({ provider })
 
 for await (const batch of stream.backfill({
@@ -755,7 +755,7 @@ Decision:
 
 Deliver:
 
-- Voltaire provider against `wss://mainnet.rpc.buidlguidl.com`
+- Voltaire provider against `RPC_WSS_URL`
 - reorg-aware block and receipt journal
 - `latest-spine` publication into the local Fabric server
 - visible `latest` / `safe` / `finalized` states
@@ -796,7 +796,7 @@ Deliver:
 
 ## Immediate Engineering Tasks
 
-- [ ] implement `createBuidlGuidlWsProvider()` as a project-owned EIP-1193 adapter
+- [x] implement `createWsProvider()` as a project-owned EIP-1193 adapter
 - [ ] probe endpoint support for `eth_getBlockReceipts`
 - [ ] build canonical journal schema
 - [ ] implement Voltaire `BlockStream` backfill and watch runner
