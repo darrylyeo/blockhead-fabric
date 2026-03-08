@@ -1,6 +1,5 @@
 import { decimal, hex, timestampFromSeconds } from '../shared/encoding.js'
 import { invalidateEventStreamEvents } from './eventStreamRunner.js'
-import { describeBytecode, fetchCodeAtBlock } from './codeEnrichment.js'
 import type { CanonicalBatch, CanonicalBlock, DbQuery, Eip1193Provider, IngestConfig, ReorgBatch, RpcCapabilities } from '../shared/types.js'
 
 type Receipt = CanonicalBlock['receipts'][number]
@@ -36,7 +35,7 @@ const normalizeCanonicalBlock = (block: CanonicalBlock): CanonicalBlock => {
 		body: {
 			transactions,
 		},
-	} as CanonicalBlock
+	} as unknown as CanonicalBlock
 }
 
 const enqueueProjectionJob = async ({
@@ -58,8 +57,8 @@ const enqueueProjectionJob = async ({
 			from projection_jobs
 			where chain_id = $1
 				and status = 'pending'
-				and from_block_number <= $3 + $4
-				and to_block_number >= $2 - $4
+				and from_block_number <= ($3::bigint + $4::bigint)
+				and to_block_number >= ($2::bigint - $4::bigint)
 			order by from_block_number asc
 			limit 1
 		`,
@@ -223,11 +222,21 @@ const upsertTransaction = async ({
 			receipt.contractAddress ? hex(receipt.contractAddress) : null,
 			decimal(transaction.value),
 			transaction.type,
-			decimal(
-				(transaction as { gas?: unknown, gasLimit?: unknown }).gas
-				?? (transaction as { gasLimit?: unknown }).gasLimit
-				?? receipt.gasUsed
-			),
+			(() => {
+				const rawGas = (
+					(transaction as { gas?: unknown, gasLimit?: unknown }).gas
+					?? (transaction as { gasLimit?: unknown }).gasLimit
+					?? receipt.gasUsed
+				)
+
+				return typeof rawGas === 'string' ?
+					decimal(BigInt(rawGas))
+				:
+					typeof rawGas === 'number' || typeof rawGas === 'bigint' ?
+						decimal(rawGas)
+					:
+						decimal(receipt.gasUsed)
+			})(),
 			'maxFeePerGas' in transaction ? decimal(transaction.maxFeePerGas) : null,
 			'maxPriorityFeePerGas' in transaction ? decimal(transaction.maxPriorityFeePerGas) : null,
 		],
@@ -404,24 +413,11 @@ const upsertAccountsAndContracts = async ({
 				)),
 			).values(),
 		].map(async ({ address, isContract }) => {
-			const codeDescription = provider ?
-				describeBytecode(await fetchCodeAtBlock({
-					provider,
-					address,
-					blockNumber,
-				}))
-			:
-				{
-					isContract: false,
-					codeHash: null,
-					bytecodeSize: null,
-				}
-
 			return {
 				address,
-				isContract: isContract || codeDescription.isContract,
-				codeHash: codeDescription.codeHash,
-				bytecodeSize: codeDescription.bytecodeSize,
+				isContract,
+				codeHash: null,
+				bytecodeSize: null,
 			}
 		}),
 	)

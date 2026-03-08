@@ -9,9 +9,10 @@ import { createWsProvider } from '../provider/createWsProvider.js'
 import { probeCapabilities } from '../provider/probeCapabilities.js'
 import { loadConfig } from '../shared/config.js'
 import { capabilitiesForLogs, checkpointForLogs, createLogger, sanitizeConfigForLogs } from '../shared/log.js'
+import type { CanonicalBatch } from '../shared/types.js'
 import { getDeepReorgRestartBlock } from './deepReorg.js'
 import { runEventStreamBackfill } from './eventStreamRunner.js'
-import { enrichBlocksEventWithReceipts, enrichReorgEventWithReceipts } from './receiptFallback.js'
+import { enrichBlockWithReceipts, enrichBlocksEventWithReceipts, enrichReorgEventWithReceipts, normalizeBlockWithProvidedReceipts } from './receiptFallback.js'
 import { getRetryDelayMs, isRetriableIngestError, sleep } from './retry.js'
 import { applyCanonicalBatch, handleReorg, invalidateCanonicalRange, updateFinality } from './store.js'
 
@@ -36,6 +37,75 @@ const getHexNumber = async ({
 	return BigInt(result)
 }
 
+const getRpcHttpUrl = (rpcWssUrl: string) => (
+	rpcWssUrl
+		.replace(/^wss:\/\//, 'https://')
+		.replace(/^ws:\/\//, 'http://')
+		.replace('/ws/', '/')
+)
+
+const requestHttpRpc = async <T>({
+	rpcHttpUrl,
+	method,
+	params = [],
+	timeoutMs,
+}: {
+	rpcHttpUrl: string
+	method: string
+	params?: unknown[]
+	timeoutMs: number
+}): Promise<T> => {
+	const controller = new AbortController()
+	const timeout = setTimeout(() => {
+		controller.abort(new Error(`Timed out after ${timeoutMs}ms`))
+	}, timeoutMs)
+
+	try {
+		const response = await fetch(rpcHttpUrl, {
+			method: 'POST',
+			headers: {
+				'content-type': 'application/json',
+			},
+			body: JSON.stringify({
+				jsonrpc: '2.0',
+				id: 1,
+				method,
+				params,
+			}),
+			signal: controller.signal,
+		})
+
+		if (!response.ok) {
+			throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+		}
+
+		const payload = await response.json() as { result?: T, error?: { code: number, message: string } }
+
+		if (payload.error) {
+			throw new Error(`RPC ${payload.error.code}: ${payload.error.message}`)
+		}
+
+		return payload.result as T
+	} finally {
+		clearTimeout(timeout)
+	}
+}
+
+const createHttpProvider = (config: ReturnType<typeof loadConfig>) => {
+	const rpcHttpUrl = getRpcHttpUrl(config.rpcWssUrl)
+
+	return {
+		request: <T>({ method, params = [] }: { method: string, params?: unknown[] }) => (
+			requestHttpRpc<T>({
+				rpcHttpUrl,
+				method,
+				params,
+				timeoutMs: config.rpcRequestTimeoutMs,
+			})
+		),
+	}
+}
+
 const withTransaction = async <T>({
 	db,
 	fn,
@@ -56,6 +126,65 @@ const withTransaction = async <T>({
 	} finally {
 		client.release()
 	}
+}
+
+const toHexQuantity = (value: bigint) => `0x${value.toString(16)}`
+
+const loadCanonicalBlockViaReceiptsRpc = async ({
+	provider,
+	blockNumber,
+}: {
+	provider: { request(args: { method: string, params?: unknown[] }): Promise<unknown> }
+	blockNumber: bigint
+}) => {
+	const blockTag = toHexQuantity(blockNumber)
+	const block = await provider.request({
+		method: 'eth_getBlockByNumber',
+		params: [blockTag, true],
+	})
+	const receipts = await provider.request({
+		method: 'eth_getBlockReceipts',
+		params: [blockTag],
+	})
+
+	if (!block || typeof block !== 'object') {
+		throw new Error(`Missing block payload for ${blockNumber.toString()}`)
+	}
+
+	if (!Array.isArray(receipts)) {
+		throw new Error(`Missing receipts payload for ${blockNumber.toString()}`)
+	}
+
+	return normalizeBlockWithProvidedReceipts({
+		block: block as Parameters<typeof normalizeBlockWithProvidedReceipts>[0]['block'],
+		receipts: receipts as Parameters<typeof normalizeBlockWithProvidedReceipts>[0]['receipts'],
+	})
+}
+
+const loadCanonicalBlockViaReceiptFallbackRpc = async ({
+	provider,
+	blockNumber,
+	receiptFetchConcurrency,
+}: {
+	provider: { request(args: { method: string, params?: unknown[] }): Promise<unknown> }
+	blockNumber: bigint
+	receiptFetchConcurrency: number
+}) => {
+	const blockTag = toHexQuantity(blockNumber)
+	const block = await provider.request({
+		method: 'eth_getBlockByNumber',
+		params: [blockTag, true],
+	})
+
+	if (!block || typeof block !== 'object') {
+		throw new Error(`Missing block payload for ${blockNumber.toString()}`)
+	}
+
+	return enrichBlockWithReceipts({
+		block: block as Parameters<typeof enrichBlockWithReceipts>[0]['block'],
+		provider,
+		receiptFetchConcurrency,
+	})
 }
 
 const runBackfillRange = async ({
@@ -88,18 +217,39 @@ const runBackfillRange = async ({
 		toBlock: toBlock.toString(),
 		mode: capabilities.supportsBlockReceipts && !config.forceReceiptFallback ? 'receipts' : 'transactions+receipt-fallback',
 	})
+	const httpProvider = createHttpProvider(config)
 
 	if (capabilities.supportsBlockReceipts && !config.forceReceiptFallback) {
-		for await (const batch of stream.backfill({
-			fromBlock,
-			toBlock,
-			include: 'receipts',
-			chunkSize: config.backfillChunkSize,
-			signal,
-		})) {
-			if (batch.blocks.length === 0) {
-				continue
+		const chunkSize = BigInt(config.backfillChunkSize)
+
+		for (let chunkStart = fromBlock; chunkStart <= toBlock; chunkStart += chunkSize) {
+			if (signal.aborted) {
+				break
 			}
+
+			const chunkEndCandidate = chunkStart + chunkSize - 1n
+			const chunkEnd = chunkEndCandidate < toBlock ? chunkEndCandidate : toBlock
+			const blockNumbers = []
+
+			for (let currentBlock = chunkStart; currentBlock <= chunkEnd; currentBlock += 1n) {
+				blockNumbers.push(currentBlock)
+			}
+
+			const blocks = await Promise.all(blockNumbers.map((blockNumber) => (
+				loadCanonicalBlockViaReceiptsRpc({
+					provider: httpProvider,
+					blockNumber,
+				})
+			)))
+
+			const batch = {
+				type: 'blocks',
+				blocks,
+				metadata: {
+					chainHead: toBlock,
+				},
+			} as CanonicalBatch
+
 			logger.info('ingest.batch.commit', {
 				source: 'backfill',
 				type: batch.type,
@@ -145,18 +295,32 @@ const runBackfillRange = async ({
 		return
 	}
 
-	for await (const event of stream.backfill({
-		fromBlock,
-		toBlock,
-		include: 'transactions',
-		chunkSize: config.backfillChunkSize,
-		signal,
-	})) {
-		const batch = await enrichBlocksEventWithReceipts({
-			event,
-			provider,
-			receiptFetchConcurrency: config.receiptFetchConcurrency,
-		})
+	const chunkSize = BigInt(config.backfillChunkSize)
+
+	for (let chunkStart = fromBlock; chunkStart <= toBlock; chunkStart += chunkSize) {
+		if (signal.aborted) {
+			break
+		}
+
+		const chunkEndCandidate = chunkStart + chunkSize - 1n
+		const chunkEnd = chunkEndCandidate < toBlock ? chunkEndCandidate : toBlock
+		const blocks = []
+
+		for (let currentBlock = chunkStart; currentBlock <= chunkEnd; currentBlock += 1n) {
+			blocks.push(await loadCanonicalBlockViaReceiptFallbackRpc({
+				provider: httpProvider,
+				blockNumber: currentBlock,
+				receiptFetchConcurrency: config.receiptFetchConcurrency,
+			}))
+		}
+
+		const batch = {
+			type: 'blocks',
+			blocks,
+			metadata: {
+				chainHead: toBlock,
+			},
+		} as CanonicalBatch
 
 		logger.info('ingest.batch.commit', {
 			source: 'backfill',

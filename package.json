@@ -3,16 +3,16 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
+		"db:migrate": "tsx src/db/migrate.ts",
+		"service:ingest": "tsx src/ingest/index.ts",
+		"service:projection": "tsx src/projection/index.ts",
+		"service:publisher": "tsx src/publisher/index.ts",
 		"service:fabric:up": "docker compose --env-file src/fabric-server/.env -f src/fabric-server/docker-compose.yml up --build -d",
 		"service:fabric:down": "docker compose --env-file src/fabric-server/.env -f src/fabric-server/docker-compose.yml down",
 		"service:fabric:logs": "docker compose --env-file src/fabric-server/.env -f src/fabric-server/docker-compose.yml logs -f",
-		"service:db:migrate": "tsx src/db/migrate.ts",
-		"service:chain:ingest": "tsx src/ingest/index.ts",
-		"service:projection": "tsx src/projection/index.ts",
-		"service:publish:fabric": "tsx src/publisher/index.ts",
-		"service:test:e2e": "tsx scripts/e2e.ts",
-		"service:test:e2e:manifolder": "tsx scripts/_e2e-manifolder-validate.ts",
 		"test": "vitest run",
+		"test:e2e": "tsx scripts/e2e.ts",
+		"test:e2e:manifolder": "tsx scripts/_e2e-manifolder-validate.ts",
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {

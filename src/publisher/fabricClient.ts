@@ -107,7 +107,6 @@ const createActions = {
 	'70:73': 'RMRoot:rmpobject_open',
 	'71:71': 'RMCObject:rmcobject_open',
 	'71:72': 'RMCObject:rmtobject_open',
-	'71:73': 'RMCObject:rmpobject_open',
 	'72:72': 'RMTObject:rmtobject_open',
 	'72:73': 'RMTObject:rmpobject_open',
 	'73:73': 'RMPObject:rmpobject_open',
@@ -119,7 +118,6 @@ const deleteActions = {
 	'70:73': 'RMRoot:rmpobject_close',
 	'71:71': 'RMCObject:rmcobject_close',
 	'71:72': 'RMCObject:rmtobject_close',
-	'71:73': 'RMCObject:rmpobject_close',
 	'72:72': 'RMTObject:rmtobject_close',
 	'72:73': 'RMTObject:rmpobject_close',
 	'73:73': 'RMPObject:rmpobject_close',
@@ -450,23 +448,33 @@ const getCreatePayload = (args: CreateObjectArgs) => ({
 	...getResourcePayload(args.resourceName, args.resourceReference),
 	...getTransformPayload(args.transform),
 	...getBoundsPayload(args.bounds),
-	Orbit_Spin_tmPeriod: 0,
-	Orbit_Spin_tmStart: 0,
-	Orbit_Spin_dA: 0,
-	Orbit_Spin_dB: 0,
-	Properties_fMass: 0,
-	Properties_fGravity: 0,
-	Properties_fColor: 0,
-	Properties_fBrightness: 0,
-	Properties_fReflectivity: 0,
-	Properties_bLockToGround: false,
-	Properties_bYouth: false,
-	Properties_bAdult: false,
-	Properties_bAvatar: false,
-	bCoord: false,
-	dA: 0,
-	dB: 0,
-	dC: 0,
+	...(
+		args.classId === 71 ?
+			{
+				Orbit_Spin_tmPeriod: 0,
+				Orbit_Spin_tmStart: 0,
+				Orbit_Spin_dA: 0,
+				Orbit_Spin_dB: 0,
+				Properties_fMass: 0,
+				Properties_fGravity: 0,
+				Properties_fColor: 0,
+				Properties_fBrightness: 0,
+				Properties_fReflectivity: 0,
+			}
+		: args.classId === 72 ?
+			{
+				Properties_bLockToGround: false,
+				Properties_bYouth: false,
+				Properties_bAdult: false,
+				Properties_bAvatar: false,
+				bCoord: false,
+				dA: 0,
+				dB: 0,
+				dC: 0,
+			}
+		:
+			{}
+	),
 })
 
 const flattenChildEntries = (value: unknown): UpdateResponseEntry[] => (
@@ -511,6 +519,31 @@ const getResponseError = (response: unknown, action: string, context?: string) =
 	}
 
 	return response
+}
+
+const getCreateResponseValue = (response: Record<string, unknown>, field: string) => {
+	if (field in response) {
+		return response[field]
+	}
+
+	const resultSets = response.aResultSet
+
+	if (!Array.isArray(resultSets) || resultSets.length === 0) {
+		return undefined
+	}
+
+	const firstSet = resultSets[0]
+
+	if (!Array.isArray(firstSet) || firstSet.length === 0) {
+		return undefined
+	}
+
+	const firstRow = firstSet[0]
+
+	return firstRow && typeof firstRow === 'object' ?
+		(firstRow as Record<string, unknown>)[field]
+	:
+		undefined
 }
 
 type BindingStore = {
@@ -767,8 +800,16 @@ export const createFabricClient = (deps: {
 
 		if (loginKey) {
 			getResponseError(
-				await socket.timeout(timeoutMs ?? 30000).emitWithAck('login', {
-					acToken64U_RP1: loginKey,
+				await new Promise((resolve, reject) => {
+					const timer = setTimeout(() => {
+						reject(new Error('login timed out'))
+					}, timeoutMs ?? 30000)
+					socket?.emit('login', {
+						acToken64U_RP1: loginKey,
+					}, (response: unknown) => {
+						clearTimeout(timer)
+						resolve(response)
+					})
 				}),
 				'login',
 			)
@@ -777,14 +818,21 @@ export const createFabricClient = (deps: {
 		return socket
 	}
 
-	const emitAction = async (action: string, payload: Record<string, unknown>, timeoutMs: number | undefined) => (
-		getResponseError(
-			await (await ensureSocket(undefined, timeoutMs))
-				.timeout(timeoutMs ?? 30000)
-				.emitWithAck(action, payload),
+	const emitAction = async (action: string, payload: Record<string, unknown>, timeoutMs: number | undefined) => {
+		const connectedSocket = await ensureSocket(undefined, timeoutMs)
+		return getResponseError(
+			await new Promise((resolve, reject) => {
+				const timer = setTimeout(() => {
+					reject(new Error(`operation has timed out for ${action}`))
+				}, timeoutMs ?? 30000)
+				connectedSocket.emit(action, payload, (response: unknown) => {
+					clearTimeout(timer)
+					resolve(response)
+				})
+			}),
 			action,
 		)
-	)
+	}
 
 	return {
 		connectRoot: async ({
@@ -881,13 +929,25 @@ export const createFabricClient = (deps: {
 			const parent = await resolveRef(args.scopeId, args.parentId)
 			const action = getCreateAction(parent.classId, args.classId)
 			const context = `objectId=${args.objectId} parentId=${args.parentId}`
+			const fabricName = nameForFabric(args.objectId)
 			const emitCreate = async () => (
-				(await ensureSocket(undefined, undefined))
-					.timeout(30000)
-					.emitWithAck(action, {
-						[getObjectIxField(parent.classId)]: parent.objectIx.toString(),
-						...getCreatePayload(args),
+				new Promise((resolve, reject) => {
+					const timer = setTimeout(() => {
+						reject(new Error('operation has timed out'))
+					}, 30000)
+					void ensureSocket(undefined, undefined).then((connectedSocket) => {
+						connectedSocket.emit(action, {
+							[getObjectIxField(parent.classId)]: parent.objectIx.toString(),
+							...getCreatePayload(args),
+						}, (response: unknown) => {
+							clearTimeout(timer)
+							resolve(response)
+						})
+					}).catch((error) => {
+						clearTimeout(timer)
+						reject(error)
 					})
+				})
 			)
 			let response: unknown
 
@@ -906,49 +966,63 @@ export const createFabricClient = (deps: {
 			}
 
 			const res = response as { nResult?: number } & Record<string, unknown>
+			const tryRecoverCreatedChild = async (candidate: UpdateResponse) => {
+				const children = await Promise.all(
+					flattenChildEntries(candidate.aChild ?? []).map((entry) => (
+						parseEntryAsync(entry, args.scopeId)
+					)),
+				)
+				const match = children.find((c) => (c.name === fabricName || c.objectId === fabricName))
+				if (!match) {
+					return null
+				}
+				const cached = refsByObjectId.get(match.objectId) ?? refsByObjectId.get(match.name)
+				if (!cached) {
+					return null
+				}
+				const ref = {
+					objectId: args.objectId,
+					classId: cached.ref.classId,
+					objectIx: cached.ref.objectIx,
+					parentClassId: parent.classId,
+					parentObjectIx: parent.objectIx,
+				}
+				if (bindingStore && args.desiredRevision !== undefined) {
+					await bindingStore.set(args.scopeId, args.objectId, ref, args.desiredRevision, fabricName)
+				}
+				return registerObject({
+					objectId: args.objectId,
+					parentObjectId: args.parentId,
+					name: args.name,
+					classId: args.classId,
+					type: args.type,
+					subtype: args.subtype,
+					resourceReference: args.resourceReference ?? null,
+					resourceName: args.resourceName ?? null,
+					transform: args.transform ?? {},
+					bounds: args.bounds ?? null,
+				}, ref)
+			}
 			if (res.nResult === -2) {
 				const parentUpdateAction = `${getClassName(parent.classId)}:update`
 				const parentUpdateResponse = await emitAction(parentUpdateAction, {
 					[getObjectIxField(parent.classId)]: parent.objectIx.toString(),
 				}, undefined) as UpdateResponse
-				const children = await Promise.all(
-					flattenChildEntries(parentUpdateResponse.aChild ?? []).map((entry) => (
-						parseEntryAsync(entry, args.scopeId)
-					)),
-				)
-				const fabricName = nameForFabric(args.objectId)
-				const match = children.find((c) => (c.name === fabricName || c.objectId === fabricName))
-				if (match) {
-					const cached = refsByObjectId.get(match.objectId) ?? refsByObjectId.get(match.name)
-					if (cached) {
-						const ref = {
-							objectId: args.objectId,
-							classId: cached.ref.classId,
-							objectIx: cached.ref.objectIx,
-							parentClassId: parent.classId,
-							parentObjectIx: parent.objectIx,
-						}
-						if (bindingStore && args.desiredRevision !== undefined) {
-							await bindingStore.set(args.scopeId, args.objectId, ref, args.desiredRevision, fabricName)
-						}
-						return registerObject({
-							objectId: args.objectId,
-							parentObjectId: args.parentId,
-							name: args.name,
-							classId: args.classId,
-							type: args.type,
-							subtype: args.subtype,
-							resourceReference: args.resourceReference ?? null,
-							resourceName: args.resourceName ?? null,
-							transform: args.transform ?? {},
-							bounds: args.bounds ?? null,
-						}, ref)
-					}
+				const recovered = await tryRecoverCreatedChild(parentUpdateResponse)
+				if (recovered) {
+					return recovered
 				}
 			}
 
 			getResponseError(response, action, context)
-			const objectIx = parseBigInt(res[getObjectIxField(args.classId)], getObjectIxField(args.classId))
+			if (res.Parent || res.aChild) {
+				const recovered = await tryRecoverCreatedChild(res as UpdateResponse)
+				if (recovered) {
+					return recovered
+				}
+			}
+			const objectIxField = getObjectIxField(args.classId)
+			const objectIx = parseBigInt(getCreateResponseValue(res, objectIxField), objectIxField)
 			const ref = {
 				objectId: args.objectId,
 				classId: args.classId,
@@ -958,7 +1032,7 @@ export const createFabricClient = (deps: {
 			}
 
 			if (bindingStore && args.desiredRevision !== undefined) {
-				await bindingStore.set(args.scopeId, args.objectId, ref, args.desiredRevision, nameForFabric(args.objectId))
+				await bindingStore.set(args.scopeId, args.objectId, ref, args.desiredRevision, fabricName)
 			}
 
 			return registerObject({

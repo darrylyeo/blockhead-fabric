@@ -2,9 +2,9 @@
  * Validates spec 003: Manifolder can load the blockhead fabric hierarchy.
  * Run after e2e (or with Fabric + publisher already running).
  *
- * Env: FABRIC_URL (default http://localhost:3000/fabric), MANIFOLDER_URL (default http://localhost:3000/app.html)
+ * Env: FABRIC_URL (default http://localhost:2000/fabric/70/1/), MANIFOLDER_URL (default http://localhost:3000/app.html)
  */
-const fabricUrl = process.env.FABRIC_URL ?? 'http://localhost:3000/fabric'
+const fabricUrl = process.env.FABRIC_URL ?? 'http://localhost:2000/fabric/70/1/'
 const manifolderUrl = process.env.MANIFOLDER_URL ?? 'http://localhost:3000/app.html'
 
 const main = async () => {

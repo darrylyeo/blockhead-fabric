@@ -170,25 +170,11 @@ const defaultFetchReceiptByHash = async ({
 	return receipt as RpcReceipt
 }
 
-const enrichBlockWithReceipts = async ({
-	block,
-	provider,
-	receiptFetchConcurrency,
-	getTransactionHash = defaultGetTransactionHash,
-	fetchReceiptByHash = defaultFetchReceiptByHash,
-}: {
-	block: TransactionBlock
-	provider: Eip1193Provider
-	receiptFetchConcurrency: number
-	getTransactionHash?: (transaction: BlockTransaction) => string
-	fetchReceiptByHash?: (args: {
-		provider: Eip1193Provider
-		txHash: string
-	}) => Promise<RpcReceipt>
-}): Promise<CanonicalBlock> => {
+const normalizeBlockShape = (block: TransactionBlock): TransactionBlock => {
 	const rpc = block as Record<string, unknown>
 	const transactions = block.body?.transactions ?? rpc.transactions ?? []
-	const normalized = (
+
+	return (
 		block.header && block.body ?
 			block
 		:
@@ -207,11 +193,66 @@ const enrichBlockWithReceipts = async ({
 				},
 				body: { transactions },
 			}
+	) as TransactionBlock
+}
+
+export const normalizeBlockWithProvidedReceipts = ({
+	block,
+	receipts,
+	getTransactionHash = defaultGetTransactionHash,
+}: {
+	block: TransactionBlock
+	receipts: RpcReceipt[]
+	getTransactionHash?: (transaction: BlockTransaction) => string
+}): CanonicalBlock => {
+	const normalized = normalizeBlockShape(block)
+	const receiptsByHash = new Map(
+		receipts.map((receipt) => (
+			[
+				receipt.transactionHash.toLowerCase(),
+				receipt,
+			]
+		)),
 	)
+
+	return {
+		...normalized,
+		receipts: normalized.body.transactions.map((transaction) => {
+			const receipt = receiptsByHash.get(getTransactionHash(transaction))
+
+			if (!receipt) {
+				throw new Error(`Missing receipt for transaction ${getTransactionHash(transaction)}`)
+			}
+
+			return normalizeReceipt({
+				transaction,
+				receipt,
+			})
+		}),
+	} as CanonicalBlock
+}
+
+export const enrichBlockWithReceipts = async ({
+	block,
+	provider,
+	receiptFetchConcurrency,
+	getTransactionHash = defaultGetTransactionHash,
+	fetchReceiptByHash = defaultFetchReceiptByHash,
+}: {
+	block: TransactionBlock
+	provider: Eip1193Provider
+	receiptFetchConcurrency: number
+	getTransactionHash?: (transaction: BlockTransaction) => string
+	fetchReceiptByHash?: (args: {
+		provider: Eip1193Provider
+		txHash: string
+	}) => Promise<RpcReceipt>
+}): Promise<CanonicalBlock> => {
+	const normalized = normalizeBlockShape(block)
 	return {
 		...normalized,
 		receipts: await fetchWithConcurrency({
-			items: transactions,
+			items: normalized.body.transactions,
 			concurrency: receiptFetchConcurrency,
 			fn: async (transaction) => (
 				normalizeReceipt({

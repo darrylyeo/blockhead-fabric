@@ -24,7 +24,7 @@ describe('loadPublisherConfig', () => {
 
 		expect(loadPublisherConfig()).toEqual({
 			databaseUrl: 'postgres://blockhead:blockhead@localhost:5432/blockhead',
-			fabricUrl: 'http://localhost:2000/fabric',
+			fabricUrl: 'http://localhost:2000/fabric/70/1/',
 			fabricAdminKey: undefined,
 			publisherPollIntervalMs: 2000,
 			publisherConnectTimeoutMs: 60000,

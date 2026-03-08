@@ -28,7 +28,9 @@ const getEnvNumber = (name: string, fallback: number) => {
 
 export const loadPublisherConfig = (): PublisherConfig => ({
 	databaseUrl: getEnv('DATABASE_URL'),
-	fabricUrl: getEnv('FABRIC_URL', 'http://localhost:2000/fabric'),
+	// Bare /fabric is server-defined and can point at a sample object.
+	// Use the explicit RMRoot descriptor so publisher reconciles against the chain world root.
+	fabricUrl: getEnv('FABRIC_URL', 'http://localhost:2000/fabric/70/1/'),
 	fabricAdminKey: process.env.FABRIC_ADMIN_KEY,
 	publisherPollIntervalMs: getEnvNumber('PUBLISHER_POLL_INTERVAL_MS', 2000),
 	publisherConnectTimeoutMs: getEnvNumber('PUBLISHER_CONNECT_TIMEOUT_MS', 60000),

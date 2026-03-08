@@ -651,7 +651,7 @@ export const materializeProtocolLandmarks = (args: {
 					entrypointId: 'entry_protocol_landmarks',
 					parentObjectId: entryObjectId,
 					entityId: `${family.containerId}:${args.config.chainId.toString()}`,
-					classId: 71,
+					classId: 73,
 					type: 0,
 					subtype: 0,
 					name: family.containerName,

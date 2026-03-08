@@ -5,7 +5,8 @@ import 'dotenv/config'
  *
  * Requires: Postgres, the local Fabric server, Manifolder.
  * 1. Start Postgres.
- * 2. Start the Fabric server (for example `pnpm service:fabric:up`) so .msf is at FABRIC_URL (default http://localhost:2000/fabric).
+ * 2. Start the Fabric server (for example `pnpm service:fabric:up`) so .msf is at FABRIC_URL
+ *    (default http://localhost:2000/fabric/70/1/ for the explicit RMRoot descriptor).
  * 3. Bootstrap Fabric if needed (login/admin so publisher can connect).
  * 4. Start Manifolder (e.g. http://localhost:3000/app.html).
  * 5. Set DATABASE_URL, RPC_WSS_URL; optionally FABRIC_URL, FABRIC_ADMIN_KEY, MANIFOLDER_URL.
@@ -117,7 +118,7 @@ const main = async () => {
 		process.exit(1)
 	}
 
-	const fabricUrl = process.env.FABRIC_URL ?? 'http://localhost:2000/fabric'
+	const fabricUrl = process.env.FABRIC_URL ?? 'http://localhost:2000/fabric/70/1/'
 	const fabricRes = await fetch(fabricUrl, { headers: { accept: 'application/json' } })
 	if (!fabricRes.ok) {
 		console.error('e2e: fabric root descriptor fetch failed', { fabricUrl, status: fabricRes.status })
