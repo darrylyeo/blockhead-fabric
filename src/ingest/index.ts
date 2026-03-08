@@ -1,3 +1,5 @@
+import 'dotenv/config'
+
 import { BlockStream, BlockStreamAbortedError, UnrecoverableReorgError } from '@tevm/voltaire/block'
 import type { Pool, PoolClient } from 'pg'
 
@@ -8,6 +10,7 @@ import { probeCapabilities } from '../provider/probeCapabilities.js'
 import { loadConfig } from '../shared/config.js'
 import { capabilitiesForLogs, checkpointForLogs, createLogger, sanitizeConfigForLogs } from '../shared/log.js'
 import { getDeepReorgRestartBlock } from './deepReorg.js'
+import { runEventStreamBackfill } from './eventStreamRunner.js'
 import { enrichBlocksEventWithReceipts, enrichReorgEventWithReceipts } from './receiptFallback.js'
 import { getRetryDelayMs, isRetriableIngestError, sleep } from './retry.js'
 import { applyCanonicalBatch, handleReorg, invalidateCanonicalRange, updateFinality } from './store.js'
@@ -420,7 +423,15 @@ const runWorkerIteration = async ({
 		const stream = BlockStream({
 			provider,
 		})
-		const backfillFromBlock = checkpoint ? checkpoint.lastSeenBlockNumber + 1n : config.ingestStartBlock
+		const backfillFromBlock = config.ingestRecentBlocksOnly !== undefined ?
+			(currentHead >= BigInt(config.ingestRecentBlocksOnly) ?
+				currentHead - BigInt(config.ingestRecentBlocksOnly) + 1n
+			:
+				0n)
+		: checkpoint ?
+			checkpoint.lastSeenBlockNumber + 1n
+		:
+			config.ingestStartBlock
 
 		await runBackfillRange({
 			stream,
@@ -433,6 +444,39 @@ const runWorkerIteration = async ({
 			signal,
 			logger,
 		})
+
+		if (config.eventStreamErc20Enabled && backfillFromBlock <= currentHead) {
+			const { rows: escRows } = await db.query(
+				`select last_seen_block from event_stream_checkpoints where chain_id = $1 and stream_id = 'erc20_usdc_transfer'`,
+				[config.chainId.toString()],
+			)
+			const eventStreamFrom = escRows[0] ?
+				BigInt(escRows[0].last_seen_block) + 1n
+			:
+				backfillFromBlock
+			if (eventStreamFrom <= currentHead) {
+				logger.info('ingest.event_stream.backfill.start', {
+					fromBlock: eventStreamFrom.toString(),
+					toBlock: currentHead.toString(),
+				})
+				await withTransaction({
+					db,
+					fn: async (client) => {
+						await runEventStreamBackfill({
+							provider,
+							db: client,
+							chainId: config.chainId,
+							fromBlock: eventStreamFrom,
+							toBlock: currentHead,
+							signal,
+						})
+					},
+				})
+				logger.info('ingest.event_stream.backfill.done', {
+					toBlock: currentHead.toString(),
+				})
+			}
+		}
 
 		let watchFromBlock = (
 			(await getIngestCheckpoint({

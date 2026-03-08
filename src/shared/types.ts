@@ -33,6 +33,7 @@ export type IngestConfig = {
 	finalityDepth: bigint
 	backfillChunkSize: number
 	ingestStartBlock: bigint
+	ingestRecentBlocksOnly?: number
 	rpcRequestTimeoutMs: number
 	reconnectBackoffMinMs: number
 	reconnectBackoffMaxMs: number
@@ -40,6 +41,7 @@ export type IngestConfig = {
 	backfillTxBatchSize: number
 	projectionJobMinRange: number
 	projectionJobCoalesceGap: number
+	eventStreamErc20Enabled: boolean
 }
 
 export type RpcCapabilities = {

@@ -31,6 +31,7 @@ export const createConfig = (overrides: Partial<IngestConfig> = {}): IngestConfi
 	backfillTxBatchSize: 32,
 	projectionJobMinRange: 1,
 	projectionJobCoalesceGap: 8,
+	eventStreamErc20Enabled: false,
 	...overrides,
 })
 

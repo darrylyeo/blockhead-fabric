@@ -210,5 +210,6 @@ export const planMutations = (args: {
 		attachmentUpdates,
 		moves,
 		deletes,
+		desiredRevision: args.snapshot.scope.desiredRevision,
 	} satisfies MutationPlan
 }

@@ -540,11 +540,11 @@ The publisher plan is good enough for v1 when:
 
 ## Implementation Status
 
-- [ ] Fabric client wrapper integrated
-- [ ] Scope polling loop implemented
-- [ ] Remote discovery cache implemented
-- [ ] Diff planner implemented
-- [ ] Ordered mutation executor implemented
-- [ ] Attachment sync implemented
-- [ ] Publication checkpoints implemented
-- [ ] Restart-safe idempotency validated
+- [x] Fabric client wrapper integrated
+- [x] Scope polling loop implemented
+- [x] Remote discovery cache implemented
+- [x] Diff planner implemented
+- [x] Ordered mutation executor implemented
+- [x] Attachment sync implemented
+- [x] Publication checkpoints implemented
+- [x] Restart-safe idempotency validated

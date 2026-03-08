@@ -206,7 +206,7 @@ export const createWsProvider = ({
 				connectPromise = null
 
 				void wait(delayMs).then(() => {
-					void connect()
+					connect().catch(() => {})
 				})
 
 				reject(error)

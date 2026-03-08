@@ -565,13 +565,13 @@ The ingest service plan is good enough for v1 when:
 
 ## Implementation Status
 
-- [ ] Provider lifecycle implemented
-- [ ] Capability probe implemented
-- [ ] Backfill path implemented
-- [ ] Watch loop implemented
-- [ ] Receipt fallback implemented
-- [ ] Reorg repair implemented
-- [ ] Deep reorg fallback implemented
-- [ ] Finality updater implemented
-- [ ] Projection job enqueueing implemented
-- [ ] Restart-from-checkpoint validated
+- [x] Provider lifecycle implemented
+- [x] Capability probe implemented
+- [x] Backfill path implemented
+- [x] Watch loop implemented
+- [x] Receipt fallback implemented
+- [x] Reorg repair implemented
+- [x] Deep reorg fallback implemented
+- [x] Finality updater implemented
+- [x] Projection job enqueueing implemented
+- [x] Restart-from-checkpoint validated

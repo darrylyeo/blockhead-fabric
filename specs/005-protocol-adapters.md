@@ -646,11 +646,11 @@ The adapter layer is good enough for v1 when:
 
 ## Implementation Status
 
-- [ ] Adapter registry implemented
-- [ ] Detection and registration persistence implemented
-- [ ] Adapter event persistence implemented
-- [ ] Adapter surface persistence implemented
-- [ ] ERC-20 adapter implemented
-- [ ] ERC-721 or ERC-1155 adapter implemented
-- [ ] AMM or governance adapter implemented
-- [ ] Reorg-safe adapter recompute validated
+- [x] Adapter registry implemented
+- [x] Detection and registration persistence implemented
+- [x] Adapter event persistence implemented
+- [x] Adapter surface persistence implemented
+- [x] ERC-20 adapter implemented
+- [x] ERC-721 or ERC-1155 adapter implemented
+- [x] AMM or governance adapter implemented
+- [x] Reorg-safe adapter recompute validated

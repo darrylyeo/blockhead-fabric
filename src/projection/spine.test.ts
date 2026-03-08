@@ -121,4 +121,52 @@ describe('materializeLatestSpine', () => {
 			gasUsed: '20000000',
 		})
 	})
+
+	it('is deterministic: same inputs produce identical outputs (full rebuild parity)', () => {
+		const args = {
+			config: {
+				databaseUrl: 'postgres://blockhead:blockhead@localhost:5432/blockhead',
+				chainId: 1n,
+				projectionPollIntervalMs: 1000,
+				spineRecentBlockCount: 256,
+				maxTxPulsesPerBlock: 24,
+				spineBlockSpacing: 24,
+				districtSpacing: 256,
+				slotSpacing: 12,
+				topContractLandmarksPerDistrict: 8,
+				projectionVersion: 1n,
+				districtAlgorithmVersion: 1n,
+				anchorAlgorithmVersion: 1n,
+				corridorAlgorithmVersion: 1n,
+				surfaceAlgorithmVersion: 1n,
+			},
+			blocks: [
+				{
+					blockNumber: 50n,
+					blockHash: '0x50',
+					timestamp: new Date('2026-03-07T00:00:00.000Z'),
+					gasUsed: '5000000',
+					txCount: 10,
+					logCount: 50,
+					finalityState: 'finalized',
+				},
+				{
+					blockNumber: 51n,
+					blockHash: '0x51',
+					timestamp: new Date('2026-03-07T00:00:12.000Z'),
+					gasUsed: '15000000',
+					txCount: 200,
+					logCount: 800,
+					finalityState: 'latest',
+				},
+			],
+		} as const
+
+		const result1 = materializeLatestSpine(args)
+		const result2 = materializeLatestSpine(args)
+
+		expect(result1.scope).toEqual(result2.scope)
+		expect(result1.entrypoints).toEqual(result2.entrypoints)
+		expect(result1.objects).toEqual(result2.objects)
+	})
 })

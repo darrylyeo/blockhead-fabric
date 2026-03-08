@@ -1,8 +1,43 @@
 import { decimal, hex, timestampFromSeconds } from '../shared/encoding.js'
+import { invalidateEventStreamEvents } from './eventStreamRunner.js'
 import { describeBytecode, fetchCodeAtBlock } from './codeEnrichment.js'
 import type { CanonicalBatch, CanonicalBlock, DbQuery, Eip1193Provider, IngestConfig, ReorgBatch, RpcCapabilities } from '../shared/types.js'
 
 type Receipt = CanonicalBlock['receipts'][number]
+
+const normalizeCanonicalBlock = (block: CanonicalBlock): CanonicalBlock => {
+	if (block.header && block.body) {
+		return block
+	}
+
+	const rpc = block as Record<string, unknown>
+	const transactions = (
+		block.body?.transactions
+		?? (Array.isArray(rpc.transactions) ? rpc.transactions : [])
+	) as CanonicalBlock['body']['transactions']
+
+	return {
+		...block,
+		header: {
+			number: typeof rpc.number === 'bigint' ? rpc.number : BigInt(rpc.number as string),
+			hash: rpc.hash,
+			parentHash: rpc.parentHash,
+			timestamp: typeof rpc.timestamp === 'bigint' ? rpc.timestamp : BigInt(rpc.timestamp as string),
+			gasUsed: typeof rpc.gasUsed === 'bigint' ? rpc.gasUsed : BigInt(rpc.gasUsed as string),
+			gasLimit: typeof rpc.gasLimit === 'bigint' ? rpc.gasLimit : BigInt(rpc.gasLimit as string),
+			baseFeePerGas: rpc.baseFeePerGas == null ?
+				undefined
+			:
+				typeof rpc.baseFeePerGas === 'bigint' ?
+					rpc.baseFeePerGas
+				:
+					BigInt(rpc.baseFeePerGas as string),
+		},
+		body: {
+			transactions,
+		},
+	} as CanonicalBlock
+}
 
 const enqueueProjectionJob = async ({
 	db,
@@ -475,7 +510,9 @@ export const applyCanonicalBatch = async ({
 		return
 	}
 
-	for (const block of batch.blocks) {
+	for (const rawBlock of batch.blocks) {
+		const block = normalizeCanonicalBlock(rawBlock)
+
 		await upsertBlock({
 			db,
 			chainId: config.chainId,
@@ -512,7 +549,7 @@ export const applyCanonicalBatch = async ({
 		}
 	}
 
-	const lastBlock = batch.blocks.at(-1)
+	const lastBlock = batch.blocks.at(-1) ? normalizeCanonicalBlock(batch.blocks.at(-1) as CanonicalBlock) : undefined
 
 	if (!lastBlock) {
 		return
@@ -633,6 +670,14 @@ export const handleReorg = async ({
 				hex(block.hash),
 			],
 		)
+	}
+
+	if (config.eventStreamErc20Enabled) {
+		await invalidateEventStreamEvents({
+			db: db as import('pg').PoolClient,
+			chainId: config.chainId,
+			blockHashes: reorg.removed.map((block) => hex(block.hash)),
+		})
 	}
 
 	await applyCanonicalBatch({

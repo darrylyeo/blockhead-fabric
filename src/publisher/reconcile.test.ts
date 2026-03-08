@@ -11,6 +11,7 @@ import {
 	createFabricScopeRow,
 	createPublicationCheckpointRow,
 	createPublisherConfig,
+	createRemoteObject,
 } from './testFactories.js'
 
 const createScopeRow = () => {
@@ -303,5 +304,80 @@ describe('reconcileScope', () => {
 				))
 				.at(-1)?.params?.[3],
 		).toBe('idle')
+	})
+
+	it('is restart-safe: second reconcile with same desired state does not create duplicates', async () => {
+		const created: ReturnType<typeof createRemoteObject>[] = []
+		const createObject = vi.fn(async (args) => {
+			const obj = createRemoteObject({
+				objectId: args.objectId,
+				parentObjectId: args.parentId,
+				name: args.name,
+				classId: args.classId,
+			})
+			created.push(obj)
+			return obj
+		})
+		const listObjects = vi.fn(async ({ anchorObjectId }: { anchorObjectId: string }) => (
+			anchorObjectId === '70:1' ?
+				[...created]
+			: []
+		))
+		const scopeRow = createScopeRow()
+		const entrypointRow = createEntrypointRow()
+		const objectRow = createObjectRow(createFabricObjectRow({
+			objectId: 'entry_latest_spine',
+			parentObjectId: 'root',
+		}))
+		const { db } = createMockDb({
+			onQuery: async (sql) => {
+				if (sql.includes('from fabric_scopes s') && sql.includes('where s.scope_id = $1')) {
+					return { command: '', rowCount: 1, oid: 0, fields: [], rows: [scopeRow] }
+				}
+				if (sql.includes('from fabric_entrypoints')) {
+					return { command: '', rowCount: 1, oid: 0, fields: [], rows: [entrypointRow] }
+				}
+				if (sql.includes('from fabric_objects')) {
+					return { command: '', rowCount: 1, oid: 0, fields: [], rows: [objectRow] }
+				}
+				if (sql.includes('from fabric_attachments')) {
+					return { command: '', rowCount: 0, oid: 0, fields: [], rows: [] }
+				}
+				if (sql.includes('select scope_id') && sql.includes('from fabric_scopes')) {
+					return { command: '', rowCount: 1, oid: 0, fields: [], rows: [{ scope_id: 'scope_eth_mainnet' }] }
+				}
+				return { command: '', rowCount: 0, oid: 0, fields: [], rows: [] }
+			},
+		})
+		const fabricClient = createMockFabricClient({
+			connectRoot: async () => ({ scopeId: 'root', rootObjectId: '70:1' }),
+			getObject: async ({ objectId }) => (
+				objectId === '70:1' ?
+					createRemoteObject({ objectId: '70:1', parentObjectId: null, classId: 70, name: 'Root' })
+				: created.find((o) => (o.objectId === objectId)) ?? null
+			),
+			listObjects,
+			createObject,
+		})
+		const logger = createLogger({ log() {}, warn() {}, error() {} })
+
+		await reconcileScope({
+			scopeId: 'scope_eth_mainnet',
+			config: createPublisherConfig(),
+			db,
+			fabricClient,
+			logger,
+		})
+		expect(createObject).toHaveBeenCalledTimes(1)
+
+		createObject.mockClear()
+		await reconcileScope({
+			scopeId: 'scope_eth_mainnet',
+			config: createPublisherConfig(),
+			db,
+			fabricClient,
+			logger,
+		})
+		expect(createObject).not.toHaveBeenCalled()
 	})
 })

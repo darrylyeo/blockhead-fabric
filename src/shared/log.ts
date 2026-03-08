@@ -57,6 +57,7 @@ export const sanitizeConfigForLogs = (config: IngestConfig) => ({
 	finalityDepth: config.finalityDepth.toString(),
 	backfillChunkSize: config.backfillChunkSize,
 	ingestStartBlock: config.ingestStartBlock.toString(),
+	ingestRecentBlocksOnly: config.ingestRecentBlocksOnly,
 	rpcRequestTimeoutMs: config.rpcRequestTimeoutMs,
 	reconnectBackoffMinMs: config.reconnectBackoffMinMs,
 	reconnectBackoffMaxMs: config.reconnectBackoffMaxMs,

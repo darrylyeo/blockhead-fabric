@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { persistAdapterEntities, persistAdapterHints, persistAdapterSurfaces, persistProjectedFabricState } from './db.js'
+import {
+	persistAdapterEntities,
+	persistAdapterEvents,
+	persistAdapterHints,
+	persistAdapterSurfaces,
+	persistProjectedFabricState,
+} from './db.js'
+import type { AdapterEventRow } from './types.js'
 
 describe('persistProjectedFabricState', () => {
 	it('partitions entrypoint object persistence and deletion by scope', async () => {
@@ -282,5 +289,64 @@ describe('adapter persistence convergence', () => {
 		expect(queries.filter(({ sql }) => (
 			sql.includes('delete from adapter_surfaces')
 		))).toHaveLength(1)
+	})
+})
+
+describe('persistAdapterEvents reorg-safety (spec 005)', () => {
+	it('keeps reorged events non-canonical after recompute', async () => {
+		const adapterEvents = new Map<string, { canonical: boolean }>()
+		const key = (r: AdapterEventRow) => (
+			`${r.chainId}:${r.adapterId}:${r.txHash}:${r.logIndex}:${r.blockHash}`
+		)
+		const db = {
+			query: async (sql: string, params?: unknown[]) => {
+				if (sql.includes('update adapter_events') && sql.includes('canonical = false')) {
+					const chainId = String(params?.[0])
+					const adapterId = String(params?.[1])
+					for (const [k, row] of adapterEvents) {
+						if (k.startsWith(`${chainId}:${adapterId}:`)) {
+							adapterEvents.set(k, { ...row, canonical: false })
+						}
+					}
+				} else if (sql.includes('insert into adapter_events')) {
+					const canonical = params?.[8] === true
+					const k = `${params?.[0]}:${params?.[1]}:${params?.[2]}:${params?.[4]}:${params?.[3]}`
+					adapterEvents.set(k, { canonical })
+				}
+				return { rows: [] }
+			},
+		}
+
+		const chainId = 1n
+		const adapterId = 'erc20'
+		const args = { chainId, adapterId }
+		const event1: AdapterEventRow = {
+			chainId,
+			adapterId,
+			txHash: '0xaaa',
+			blockHash: '0xbbb',
+			logIndex: 0,
+			targetAddress: '0x1111111111111111111111111111111111111111',
+			eventFamily: 'transfer',
+			payloadJson: {},
+			canonical: true,
+		}
+		const event2: AdapterEventRow = {
+			chainId,
+			adapterId,
+			txHash: '0xccc',
+			blockHash: '0xddd',
+			logIndex: 0,
+			targetAddress: '0x2222222222222222222222222222222222222222',
+			eventFamily: 'transfer',
+			payloadJson: {},
+			canonical: true,
+		}
+
+		await persistAdapterEvents(db, [event1, event2], args)
+		await persistAdapterEvents(db, [event1], args)
+
+		expect(adapterEvents.get(key(event1))?.canonical).toBe(true)
+		expect(adapterEvents.get(key(event2))?.canonical).toBe(false)
 	})
 })

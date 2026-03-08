@@ -1862,16 +1862,25 @@ export const loadErc20Transfers = async (db: ProjectionDb, args: {
 		`
 			select
 				tx_hash,
-				(payload_json->>'blockNumber')::bigint as block_number,
-				payload_json->>'from' as from_address,
-				payload_json->>'to' as to_address,
-				coalesce(payload_json->>'tokenClass', 'unknown-token') as token_class
-			from adapter_events
-			where chain_id = $1
-				and adapter_id = 'erc20'
-				and canonical = true
-				and event_family = 'transfer'
-				and (payload_json->>'blockNumber')::bigint >= $2
+				block_number,
+				from_address,
+				to_address,
+				token_class
+			from (
+				select distinct on (tx_hash, log_index, block_hash)
+					tx_hash,
+					(payload_json->>'blockNumber')::bigint as block_number,
+					payload_json->>'from' as from_address,
+					payload_json->>'to' as to_address,
+					coalesce(payload_json->>'tokenClass', 'unknown-token') as token_class
+				from adapter_events
+				where chain_id = $1
+					and adapter_id in ('erc20', 'event_stream_erc20')
+					and canonical = true
+					and event_family = 'transfer'
+					and (payload_json->>'blockNumber')::bigint >= $2
+				order by tx_hash, log_index, block_hash, adapter_id desc
+			) deduped
 			order by block_number asc, tx_hash asc
 		`,
 		[

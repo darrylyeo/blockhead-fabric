@@ -4,6 +4,7 @@ const runCreates = async (args: {
 	scopeId: string
 	fabricClient: FabricClient
 	mutations: MutationPlan['creates']
+	desiredRevision: bigint
 }) => {
 	for (const mutation of args.mutations) {
 		await args.fabricClient.createObject({
@@ -18,6 +19,7 @@ const runCreates = async (args: {
 			resourceName: mutation.resourceName,
 			transform: mutation.transform,
 			bounds: mutation.bounds,
+			desiredRevision: args.desiredRevision,
 		})
 	}
 }
@@ -26,6 +28,7 @@ const runUpdates = async (args: {
 	scopeId: string
 	fabricClient: FabricClient
 	mutations: MutationPlan['updates']
+	desiredRevision: bigint
 }) => {
 	for (const mutation of args.mutations) {
 		await args.fabricClient.updateObject({
@@ -40,6 +43,7 @@ const runUpdates = async (args: {
 			resourceName: mutation.resourceName,
 			transform: mutation.transform,
 			bounds: mutation.bounds,
+			desiredRevision: args.desiredRevision,
 		})
 	}
 }
@@ -80,11 +84,13 @@ export const executeMutations = async (args: {
 		scopeId: args.scopeId,
 		fabricClient: args.fabricClient,
 		mutations: args.plan.creates,
+		desiredRevision: args.plan.desiredRevision,
 	})
 	await runUpdates({
 		scopeId: args.scopeId,
 		fabricClient: args.fabricClient,
 		mutations: args.plan.updates,
+		desiredRevision: args.plan.desiredRevision,
 	})
 	await runMoves({
 		scopeId: args.scopeId,
@@ -95,6 +101,7 @@ export const executeMutations = async (args: {
 		scopeId: args.scopeId,
 		fabricClient: args.fabricClient,
 		mutations: args.plan.attachmentUpdates,
+		desiredRevision: args.plan.desiredRevision,
 	})
 	await runDeletes({
 		scopeId: args.scopeId,

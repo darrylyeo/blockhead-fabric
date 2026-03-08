@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { io } from 'socket.io-client'
 
 import type {
@@ -83,6 +84,22 @@ const nameFields = {
 	72: 'Name_wsRMTObjectId',
 	73: 'Name_wsRMPObjectId',
 } as const
+
+const NAME_MAX_LENGTH = 48
+
+const nameForFabric = (objectId: string) => (
+	objectId.length <= NAME_MAX_LENGTH ?
+		objectId
+	:
+		'h:' + createHash('sha256').update(objectId).digest('hex').slice(0, 45)
+)
+
+const truncateObjectName = (s: string) => (
+	s.length > NAME_MAX_LENGTH ?
+		s.slice(0, NAME_MAX_LENGTH)
+	:
+		s
+)
 
 const createActions = {
 	'70:71': 'RMRoot:rmcobject_open',
@@ -343,7 +360,7 @@ const getDeleteAction = (parentClassId: number, childClassId: number) => {
 }
 
 const getNamePayload = (classId: number, objectId: string) => ({
-	[getNameField(classId)]: objectId,
+	[getNameField(classId)]: nameForFabric(objectId),
 })
 
 const getTypePayload = (classId: number, type: number, subtype: number) => ({
@@ -465,24 +482,52 @@ const flattenChildEntries = (value: unknown): UpdateResponseEntry[] => (
 		[]
 )
 
-const getResponseError = (response: unknown, action: string) => {
+const getResponseError = (response: unknown, action: string, context?: string) => {
 	if (!response || typeof response !== 'object' || !('nResult' in response)) {
-		throw new Error(`Invalid Fabric response for ${action}`)
+		throw new Error(
+			context ?
+				`Invalid Fabric response for ${action} (${context})`
+			:
+				`Invalid Fabric response for ${action}`,
+		)
 	}
 
 	if (response.nResult !== 0) {
-		throw new Error(`Fabric action failed: ${action}`)
+		const n = (response as { nResult?: number }).nResult
+		const code = typeof n === 'number' ?
+			` nResult=${n}`
+		:
+			''
+		const hint = n === -2 ?
+			' (Fabric often uses -2 for duplicate name or DB constraint; reset scope or check server/DB logs)'
+		:
+			''
+		throw new Error(
+			context ?
+				`Fabric action failed: ${action} (${context})${code}${hint}`
+			:
+				`Fabric action failed: ${action}${code}${hint}`,
+		)
 	}
 
 	return response
 }
 
+type BindingStore = {
+	get(scopeId: string, objectId: string): Promise<{ classId: number, objectIx: bigint } | null>
+	set(scopeId: string, objectId: string, ref: { classId: number, objectIx: bigint }, lastSeenRevision: bigint, fabricName?: string): Promise<void>
+	getObjectIdByFabricName?(scopeId: string, fabricName: string): Promise<string | null>
+	delete(scopeId: string, objectId: string): Promise<void>
+}
+
 export const createFabricClient = (deps: {
 	fetchImpl?: FetchImpl
 	ioImpl?: IoImpl
+	bindingStore?: BindingStore
 } = {}): FabricClient => {
 	const fetchImpl = deps.fetchImpl ?? fetch
 	const ioImpl = deps.ioImpl ?? io
+	const bindingStore = deps.bindingStore
 	const refsByObjectId = new Map<string, CachedObject>()
 	const refsByRemoteKey = new Map<string, CachedObject>()
 	let descriptor: FabricDescriptor | null = null
@@ -520,11 +565,39 @@ export const createFabricClient = (deps: {
 		return cached.object
 	}
 
-	const resolveRef = (objectId: string) => {
-		const cached = refsByObjectId.get(objectId)
+	const resolveRef = async (scopeId: string, objectId: string): Promise<RemoteRef> => {
+		const cached = refsByObjectId.get(objectId) ?? refsByObjectId.get(truncateObjectName(objectId))
 
 		if (cached) {
 			return cached.ref
+		}
+
+		const binding = bindingStore ?
+			await bindingStore.get(scopeId, objectId)
+		:
+			null
+
+		if (binding) {
+			const ref: RemoteRef = {
+				objectId,
+				classId: binding.classId,
+				objectIx: binding.objectIx,
+				parentClassId: null,
+				parentObjectIx: null,
+			}
+			registerObject({
+				objectId,
+				parentObjectId: null,
+				name: objectId,
+				classId: binding.classId,
+				type: 0,
+				subtype: 0,
+				resourceReference: null,
+				resourceName: null,
+				transform: {},
+				bounds: null,
+			}, ref)
+			return ref
 		}
 
 		const parsed = parseRemoteRefFromObjectId(objectId)
@@ -573,10 +646,64 @@ export const createFabricClient = (deps: {
 			null
 		: refsByRemoteKey.get(createRemoteKey(parentClassId, parentObjectIx))?.ref.objectId
 			?? `${parentClassId}:${parentObjectIx.toString()}`
+		const nameFromServer = getNameFromEntry(classId, entry) ?? `${classId}:${objectIx.toString()}`
 		const object = {
-			objectId: existing?.ref.objectId ?? getNameFromEntry(classId, entry) ?? `${classId}:${objectIx.toString()}`,
+			objectId: existing?.ref.objectId ?? nameFromServer,
 			parentObjectId,
-			name: getNameFromEntry(classId, entry) ?? existing?.object.name ?? `${classId}:${objectIx.toString()}`,
+			name: nameFromServer,
+			classId,
+			type: entry.pType?.bType ?? 0,
+			subtype: entry.pType?.bSubtype ?? 0,
+			resourceReference: entry.pResource?.sReference ?? null,
+			resourceName: entry.pResource?.sName ?? null,
+			transform: getTransform(entry),
+			bounds: getBounds(entry),
+		} satisfies FabricObject
+
+		return registerObject(object, {
+			objectId: object.objectId,
+			classId,
+			objectIx,
+			parentClassId,
+			parentObjectIx,
+		})
+	}
+
+	const parseEntryAsync = async (entry: UpdateResponseEntry, scopeId: string) => {
+		if (!entry.pObjectHead) {
+			throw new Error('Invalid Fabric update response entry')
+		}
+
+		const classId = entry.pObjectHead.wClass_Object
+
+		if (typeof classId !== 'number') {
+			throw new Error('Fabric update response entry missing object class')
+		}
+
+		const objectIx = parseBigInt(entry.pObjectHead.twObjectIx, 'twObjectIx')
+		const parentClassId = typeof entry.pObjectHead.wClass_Parent === 'number' && entry.pObjectHead.wClass_Parent > 0 ?
+			entry.pObjectHead.wClass_Parent
+		:
+			null
+		const parentObjectIx = entry.pObjectHead.twParentIx === undefined || parentClassId === null ?
+			null
+		: parseBigInt(entry.pObjectHead.twParentIx, 'twParentIx')
+		const existing = refsByRemoteKey.get(createRemoteKey(classId, objectIx))
+		const parentObjectId = parentClassId === null || parentObjectIx === null ?
+			null
+		: refsByRemoteKey.get(createRemoteKey(parentClassId, parentObjectIx))?.ref.objectId
+			?? `${parentClassId}:${parentObjectIx.toString()}`
+		const nameFromServer = getNameFromEntry(classId, entry) ?? `${classId}:${objectIx.toString()}`
+		const objectId = existing?.ref.objectId ?? (
+			bindingStore?.getObjectIdByFabricName ?
+				(await bindingStore.getObjectIdByFabricName(scopeId, nameFromServer)) ?? nameFromServer
+			:
+				nameFromServer
+		)
+		const object = {
+			objectId,
+			parentObjectId,
+			name: nameFromServer,
 			classId,
 			type: entry.pType?.bType ?? 0,
 			subtype: entry.pType?.bSubtype ?? 0,
@@ -708,15 +835,16 @@ export const createFabricClient = (deps: {
 			} satisfies ConnectRootResult
 		},
 		listObjects: async ({
+			scopeId,
 			anchorObjectId,
 		}) => {
-			const ref = resolveRef(anchorObjectId)
+			const ref = await resolveRef(scopeId, anchorObjectId)
 			const action = `${getClassName(ref.classId)}:update`
 			const response = await emitAction(action, {
 				[getObjectIxField(ref.classId)]: ref.objectIx.toString(),
 			}, undefined) as UpdateResponse
 			const parent = response.Parent ?
-				parseEntry(response.Parent)
+				await parseEntryAsync(response.Parent, scopeId)
 			:
 				null
 
@@ -730,30 +858,108 @@ export const createFabricClient = (deps: {
 				})
 			}
 
-			return flattenChildEntries(response.aChild ?? []).map(parseEntry)
+			return Promise.all(
+				flattenChildEntries(response.aChild ?? []).map((entry) => parseEntryAsync(entry, scopeId)),
+			)
 		},
 		getObject: async ({
+			scopeId,
 			objectId,
 		}) => {
-			const ref = resolveRef(objectId)
+			const ref = await resolveRef(scopeId, objectId)
 			const action = `${getClassName(ref.classId)}:update`
 			const response = await emitAction(action, {
 				[getObjectIxField(ref.classId)]: ref.objectIx.toString(),
 			}, undefined) as UpdateResponse
 
 			return response.Parent ?
-				parseEntry(response.Parent)
+				await parseEntryAsync(response.Parent, scopeId)
 			:
 				null
 		},
 		createObject: async (args) => {
-			const parent = resolveRef(args.parentId)
+			const parent = await resolveRef(args.scopeId, args.parentId)
 			const action = getCreateAction(parent.classId, args.classId)
-			const response = await emitAction(action, {
-				[getObjectIxField(parent.classId)]: parent.objectIx.toString(),
-				...getCreatePayload(args),
-			}, undefined) as Record<string, unknown>
-			const objectIx = parseBigInt(response[getObjectIxField(args.classId)], getObjectIxField(args.classId))
+			const context = `objectId=${args.objectId} parentId=${args.parentId}`
+			const emitCreate = async () => (
+				(await ensureSocket(undefined, undefined))
+					.timeout(30000)
+					.emitWithAck(action, {
+						[getObjectIxField(parent.classId)]: parent.objectIx.toString(),
+						...getCreatePayload(args),
+					})
+			)
+			let response: unknown
+
+			try {
+				response = await emitCreate()
+				const first = response as { nResult?: number } | null
+				if (first && typeof first === 'object' && first.nResult === -2) {
+					await new Promise((r) => { setTimeout(r, 300) })
+					response = await emitCreate()
+				}
+			} catch (err) {
+				throw err instanceof Error ?
+					new Error(`${err.message} (${context})`)
+				:
+					new Error(`${String(err)} (${context})`)
+			}
+
+			const res = response as { nResult?: number } & Record<string, unknown>
+			if (res.nResult === -2) {
+				const parentUpdateAction = `${getClassName(parent.classId)}:update`
+				const parentUpdateResponse = await emitAction(parentUpdateAction, {
+					[getObjectIxField(parent.classId)]: parent.objectIx.toString(),
+				}, undefined) as UpdateResponse
+				const children = await Promise.all(
+					flattenChildEntries(parentUpdateResponse.aChild ?? []).map((entry) => (
+						parseEntryAsync(entry, args.scopeId)
+					)),
+				)
+				const fabricName = nameForFabric(args.objectId)
+				const match = children.find((c) => (c.name === fabricName || c.objectId === fabricName))
+				if (match) {
+					const cached = refsByObjectId.get(match.objectId) ?? refsByObjectId.get(match.name)
+					if (cached) {
+						const ref = {
+							objectId: args.objectId,
+							classId: cached.ref.classId,
+							objectIx: cached.ref.objectIx,
+							parentClassId: parent.classId,
+							parentObjectIx: parent.objectIx,
+						}
+						if (bindingStore && args.desiredRevision !== undefined) {
+							await bindingStore.set(args.scopeId, args.objectId, ref, args.desiredRevision, fabricName)
+						}
+						return registerObject({
+							objectId: args.objectId,
+							parentObjectId: args.parentId,
+							name: args.name,
+							classId: args.classId,
+							type: args.type,
+							subtype: args.subtype,
+							resourceReference: args.resourceReference ?? null,
+							resourceName: args.resourceName ?? null,
+							transform: args.transform ?? {},
+							bounds: args.bounds ?? null,
+						}, ref)
+					}
+				}
+			}
+
+			getResponseError(response, action, context)
+			const objectIx = parseBigInt(res[getObjectIxField(args.classId)], getObjectIxField(args.classId))
+			const ref = {
+				objectId: args.objectId,
+				classId: args.classId,
+				objectIx,
+				parentClassId: parent.classId,
+				parentObjectIx: parent.objectIx,
+			}
+
+			if (bindingStore && args.desiredRevision !== undefined) {
+				await bindingStore.set(args.scopeId, args.objectId, ref, args.desiredRevision, nameForFabric(args.objectId))
+			}
 
 			return registerObject({
 				objectId: args.objectId,
@@ -766,16 +972,10 @@ export const createFabricClient = (deps: {
 				resourceName: args.resourceName ?? null,
 				transform: args.transform ?? {},
 				bounds: args.bounds ?? null,
-			}, {
-				objectId: args.objectId,
-				classId: args.classId,
-				objectIx,
-				parentClassId: parent.classId,
-				parentObjectIx: parent.objectIx,
-			})
+			}, ref)
 		},
 		updateObject: async (args) => {
-			const ref = resolveRef(args.objectId)
+			const ref = await resolveRef(args.scopeId, args.objectId)
 
 			if (ref.classId !== args.classId) {
 				throw new Error(`Fabric class mismatch for ${args.objectId}`)
@@ -802,6 +1002,10 @@ export const createFabricClient = (deps: {
 				...getResourcePayload(args.resourceName, args.resourceReference),
 			}, undefined)
 
+			if (bindingStore && args.desiredRevision !== undefined) {
+				await bindingStore.set(args.scopeId, args.objectId, ref, args.desiredRevision)
+			}
+
 			return registerObject({
 				objectId: args.objectId,
 				parentObjectId: args.parentId,
@@ -816,13 +1020,13 @@ export const createFabricClient = (deps: {
 			}, ref)
 		},
 		moveObject: async (args) => {
-			const ref = resolveRef(args.objectId)
+			const ref = await resolveRef(args.scopeId, args.objectId)
 
 			if (ref.classId !== 73) {
 				throw new Error(`Fabric in-place moves only support class 73: ${args.objectId}`)
 			}
 
-			const parent = resolveRef(args.parentId)
+			const parent = await resolveRef(args.scopeId, args.parentId)
 
 			await emitAction('RMPObject:parent', {
 				twRMPObjectIx: ref.objectIx.toString(),
@@ -850,9 +1054,10 @@ export const createFabricClient = (deps: {
 			})
 		},
 		deleteObject: async ({
+			scopeId,
 			objectId,
 		}) => {
-			const ref = resolveRef(objectId)
+			const ref = await resolveRef(scopeId, objectId)
 
 			if (ref.parentClassId === null || ref.parentObjectIx === null) {
 				throw new Error(`Fabric object has no deletable parent: ${objectId}`)
@@ -863,6 +1068,10 @@ export const createFabricClient = (deps: {
 				[`${getObjectIxField(ref.classId)}_Close`]: ref.objectIx.toString(),
 				bDeleteAll: false,
 			}, undefined)
+
+			if (bindingStore) {
+				await bindingStore.delete(scopeId, objectId)
+			}
 
 			refsByObjectId.delete(ref.objectId)
 			refsByRemoteKey.delete(createRemoteKey(ref.classId, ref.objectIx))

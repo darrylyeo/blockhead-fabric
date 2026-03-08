@@ -797,12 +797,12 @@ Deliver:
 ## Immediate Engineering Tasks
 
 - [x] implement `createWsProvider()` as a project-owned EIP-1193 adapter
-- [ ] probe endpoint support for `eth_getBlockReceipts`
+- [x] probe endpoint support for `eth_getBlockReceipts` (probeCapabilities + rpc_capabilities + ingest receipt mode)
 - [ ] build canonical journal schema
 - [ ] implement Voltaire `BlockStream` backfill and watch runner
 - [ ] publish one `latest-spine` entrypoint into `localhost:2000`
 - [ ] validate object traversal from an existing Fabric client
-- [ ] add `EventStream` for one protocol overlay
+- [x] add `EventStream` for one protocol overlay (USDC Transfer via EVENT_STREAM_ERC20_ENABLED)
 - [ ] decide whether upstream server changes require a fork immediately or can wait until publication pressure appears
 
 ## Cross-Spec Acceptance Criteria

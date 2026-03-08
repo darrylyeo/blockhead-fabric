@@ -70,6 +70,15 @@ export const loadConfig = (): IngestConfig => ({
 	finalityDepth: getEnvBigInt('FINALITY_DEPTH', 64n),
 	backfillChunkSize: getEnvNumber('BACKFILL_CHUNK_SIZE', 100),
 	ingestStartBlock: getEnvBigInt('INGEST_START_BLOCK', 0n),
+	ingestRecentBlocksOnly: (() => {
+		const raw = process.env.INGEST_RECENT_BLOCKS_ONLY
+		if (raw === undefined || raw === '') return undefined
+		const n = Number(raw)
+		if (!Number.isInteger(n) || n < 1) {
+			throw new Error(`Invalid INGEST_RECENT_BLOCKS_ONLY=${raw}: must be a positive integer`)
+		}
+		return n
+	})(),
 	rpcRequestTimeoutMs: getEnvNumber('RPC_REQUEST_TIMEOUT_MS', 30000),
 	reconnectBackoffMinMs: getEnvNumber('RECONNECT_BACKOFF_MIN_MS', 1000),
 	reconnectBackoffMaxMs: getEnvNumber('RECONNECT_BACKOFF_MAX_MS', 30000),
@@ -77,4 +86,5 @@ export const loadConfig = (): IngestConfig => ({
 	backfillTxBatchSize: getEnvNumber('BACKFILL_TX_BATCH_SIZE', 32),
 	projectionJobMinRange: getEnvNumber('PROJECTION_JOB_MIN_RANGE', 1),
 	projectionJobCoalesceGap: getEnvNumber('PROJECTION_JOB_COALESCE_GAP', 8),
+	eventStreamErc20Enabled: getEnvBoolean('EVENT_STREAM_ERC20_ENABLED', false),
 })

@@ -789,11 +789,11 @@ The projection layer is good enough for v1 when:
 
 ## Implementation Status
 
-- [ ] Block spine projection implemented
-- [ ] District assignment implemented
-- [ ] Anchor placement implemented
-- [ ] Corridor aggregation implemented
-- [ ] State surface derivation implemented
-- [ ] Event-effect projection implemented
-- [ ] Attachment partitioning implemented
-- [ ] Full rebuild parity validated
+- [x] Block spine projection implemented
+- [x] District assignment implemented
+- [x] Anchor placement implemented
+- [x] Corridor aggregation implemented
+- [x] State surface derivation implemented
+- [x] Event-effect projection implemented
+- [x] Attachment partitioning implemented
+- [x] Full rebuild parity validated (determinism tests for spine, districts, corridors)

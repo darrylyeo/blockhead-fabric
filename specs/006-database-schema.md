@@ -970,11 +970,16 @@ The schema is good enough for v1 when:
 
 ## Implementation Status
 
-- [ ] Migration order fixed
-- [ ] Journal tables implemented
-- [ ] Projection tables implemented
-- [ ] Adapter tables implemented
-- [ ] Desired Fabric tables implemented
-- [ ] Publication checkpoint table implemented
-- [ ] Helper views implemented
-- [ ] End-to-end replay and rebuild validated
+- [x] Migration order fixed (008 adds config_revisions and helper views)
+- [x] Journal tables implemented (blocks, transactions, receipts, logs, accounts, contracts, reorg_events, ingest_checkpoints)
+- [x] Projection tables implemented (projection_jobs, projection_checkpoints, districts, district_memberships, entity_anchors, corridors, state_surfaces)
+- [x] Adapter tables implemented (adapter_entities, adapter_events, adapter_surfaces, adapter_hints)
+- [x] Desired Fabric tables implemented (fabric_scopes, fabric_entrypoints, fabric_objects, fabric_attachments)
+- [x] Publication checkpoint table implemented
+- [x] Helper views implemented (canonical_blocks, canonical_transactions, canonical_logs)
+- [x] End-to-end replay and rebuild validated
+
+### Schema Mismatches (non-blocking)
+
+- **transactions**: missing `status integer null` (receipts has status)
+- **projection_jobs**: missing `reason text not null`; has extra `attempt_count`, `last_error` (operational columns)

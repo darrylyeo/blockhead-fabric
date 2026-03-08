@@ -25,12 +25,13 @@ export const discoverRemoteState = async (args: {
 		adminKey: args.fabricAdminKey,
 		timeoutMs: args.timeoutMs,
 	})
+	const scopeId = args.snapshot.scope.scopeId
 	const rootObject = await args.fabricClient.getObject({
-		scopeId: connection.scopeId,
+		scopeId,
 		objectId: connection.rootObjectId,
 	})
 	const rootChildren = await args.fabricClient.listObjects({
-		scopeId: connection.scopeId,
+		scopeId,
 		anchorObjectId: connection.rootObjectId,
 	})
 	const desiredEntrypointIds = new Set(
@@ -60,7 +61,7 @@ export const discoverRemoteState = async (args: {
 		}
 
 		const children = await args.fabricClient.listObjects({
-			scopeId: connection.scopeId,
+			scopeId,
 			anchorObjectId,
 		})
 
@@ -75,7 +76,7 @@ export const discoverRemoteState = async (args: {
 	}
 
 	return {
-		scopeId: connection.scopeId,
+		scopeId,
 		rootObjectId: connection.rootObjectId,
 		rootObject,
 		rootChildren,

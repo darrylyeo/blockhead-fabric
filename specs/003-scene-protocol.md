@@ -643,10 +643,27 @@ The scene protocol is good enough when:
 
 ## Implementation Status
 
-- [ ] Scope and entrypoint IDs fixed
-- [ ] Object ID scheme fixed
-- [ ] Metadata schema fixed
-- [ ] Attachment contract fixed
-- [ ] `latest-spine` hierarchy validated
-- [ ] `district-atlas` hierarchy validated
-- [ ] Client compatibility validated with existing Fabric tooling
+- [x] Scope and entrypoint IDs fixed
+- [x] Object ID scheme fixed
+- [x] Metadata schema fixed
+- [x] Attachment contract fixed
+- [x] `latest-spine` hierarchy validated
+- [x] `district-atlas` hierarchy validated
+- [x] Client compatibility validated with existing Fabric tooling (e2e root-descriptor check; Manifolder at http://localhost:3000/app.html?msf=http://localhost:2000/fabric loads hierarchy)
+- [x] Blockhead Fabric in Manifolder featured list (Blockhead Fabric (Local) → http://localhost:2000/fabric)
+- [x] Automated Manifolder E2E: `pnpm service:test:e2e:manifolder` validates fabric descriptor + Manifolder page load
+
+### Audit Notes (2026-03-08)
+
+**Matches spec:**
+- Scope: `scope_eth_mainnet` for chain 1
+- Entrypoint IDs: `entry_latest_spine`, `entry_district_atlas`, `entry_protocol_landmarks`
+- Object IDs: `block:chainId:blockNumber`, `district:chainId:districtId`, `account:chainId:address`, `contract:chainId:address`, `attachment:chainId:kind:address`, `surface:entityId:surfaceId`
+- Metadata: `schemaVersion`, `entityId`, `entityKind`, `chainId`, `canonical`, `finalityState` (blocks), `updatedAtBlock`
+- Attachments: subtype `255`, `resourceReference` to child scope descriptor
+- Hierarchy: entry → container:spine → block → tx/event; entry → district → account/contract; corridors under source district; protocol-landmarks → containers (class 71) → contracts
+
+**Deviations:**
+- Corridor ID: impl uses `corridor:chainId:source:target:flowClass:tokenClass:window` (colons, includes window); spec example uses `corridor:1:d_ab|d_f4|erc20_transfer|usdc` (pipe in key)
+- Class IDs: spine entry, container, blocks use 73; spec recommends 71 for spine container, 72 for blocks
+- Versioning: `projectionVersion` and `layoutVersion` not in object metadata (schemaVersion present)

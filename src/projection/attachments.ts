@@ -147,7 +147,7 @@ export const materializeAttachmentCandidates = (args: {
 			entrypointId,
 			parentObjectId: 'root',
 			entityId: `entry:inspect-attachment:${args.config.chainId.toString()}:${pool.address}`,
-			classId: 73,
+			classId: 72,
 			type: 0,
 			subtype: 0,
 			name: candidate.title,

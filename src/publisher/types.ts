@@ -124,6 +124,7 @@ export type CreateObjectArgs = {
 	resourceName?: string | null
 	transform?: Record<string, unknown>
 	bounds?: Record<string, unknown> | null
+	desiredRevision?: bigint
 }
 
 export type UpdateObjectArgs = CreateObjectArgs
@@ -166,6 +167,7 @@ export type MutationPlan = {
 	attachmentUpdates: ObjectMutation[]
 	moves: MoveMutation[]
 	deletes: DeleteMutation[]
+	desiredRevision: bigint
 }
 
 export type FabricClient = {

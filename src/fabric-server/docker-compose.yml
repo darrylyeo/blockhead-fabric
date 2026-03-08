@@ -1,0 +1,37 @@
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+      MYSQL_USER: ${MYSQL_USER:-map}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-mappass}
+    volumes:
+      - ./init-db.sql:/docker-entrypoint-initdb.d/01-grant.sql:ro
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "${MVSF_PORT:-2000}:2000"
+    environment:
+      NODE_INTERNALPORT: 2000
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_USER: ${MYSQL_USER:-map}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-mappass}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-map_db}
+      MVSF_KEY: ${MVSF_KEY:-changeme}
+      MVSF_COMPANY_ID: ${MVSF_COMPANY_ID:-}
+      MVSF_WAN_HOST: ${MVSF_WAN_HOST:-localhost}
+      MVSF_WAN_PORT: ${MVSF_WAN_PORT:-2000}

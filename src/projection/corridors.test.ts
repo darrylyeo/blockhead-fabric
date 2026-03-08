@@ -176,4 +176,90 @@ describe('materializeCorridors', () => {
 			window: 32,
 		})
 	})
+
+	it('is deterministic: same inputs produce identical outputs (full rebuild parity)', () => {
+		const args = {
+			config,
+			headBlockNumber: 100n,
+			entities: [
+				{
+					address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+					isContract: false,
+					lastSeenBlock: 100n,
+					familyLabel: null,
+				},
+				{
+					address: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+					isContract: false,
+					lastSeenBlock: 100n,
+					familyLabel: null,
+				},
+			],
+			memberships: [
+				{
+					chainId: 1n,
+					entityId: 'account:1:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+					entityKind: 'account',
+					districtId: 'd_aa',
+					districtAlgorithmVersion: 1n,
+					updatedAtBlock: 100n,
+				},
+				{
+					chainId: 1n,
+					entityId: 'account:1:0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+					entityKind: 'account',
+					districtId: 'd_bb',
+					districtAlgorithmVersion: 1n,
+					updatedAtBlock: 100n,
+				},
+			],
+			districts: [
+				{
+					chainId: 1n,
+					districtId: 'd_aa',
+					districtKey: 'aa',
+					originX: 0,
+					originY: 0,
+					originZ: 0,
+					entityCount: 1,
+					contractCount: 0,
+					accountCount: 1,
+					activityWindow32: 1,
+					projectionVersion: 1n,
+					updatedAtBlock: 100n,
+				},
+				{
+					chainId: 1n,
+					districtId: 'd_bb',
+					districtKey: 'bb',
+					originX: 64,
+					originY: 0,
+					originZ: 0,
+					entityCount: 1,
+					contractCount: 0,
+					accountCount: 1,
+					activityWindow32: 1,
+					projectionVersion: 1n,
+					updatedAtBlock: 100n,
+				},
+			],
+			nativeTransfers: Array.from({
+				length: 8,
+			}, (_, index) => ({
+				txHash: `0xtx${index}`,
+				blockNumber: 100n - BigInt(index),
+				fromAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+				toAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+				valueWei: '10',
+			})),
+			contractCalls: [],
+			erc20Transfers: [],
+		} as const
+
+		const result1 = materializeCorridors(args)
+		const result2 = materializeCorridors(args)
+
+		expect(result1.rows).toEqual(result2.rows)
+		expect(result1.objects).toEqual(result2.objects)
+	})
 })

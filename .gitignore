@@ -1,2 +1,4 @@
 .DS_Store
+.env
+src/fabric-server/.env
 node_modules

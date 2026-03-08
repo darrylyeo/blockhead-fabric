@@ -34,6 +34,7 @@ describe('loadConfig', () => {
 			backfillTxBatchSize: 32,
 			projectionJobMinRange: 1,
 			projectionJobCoalesceGap: 8,
+			eventStreamErc20Enabled: false,
 		})
 	})
 

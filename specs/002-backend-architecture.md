@@ -1139,5 +1139,5 @@ The backend is ready for the first end-to-end demo when:
 - [x] Projection service (poll `projection_jobs`, materialize spine into fabric_*)
 - [x] Desired Fabric state tables (fabric_scopes, fabric_entrypoints, fabric_objects)
 - [x] Publication service (reconcile desired → Fabric server)
-- [ ] Local Fabric server integration (manual: run spatial-fabric-service, bootstrap, then services)
-- [ ] End-to-end demo against Ethereum mainnet
+- [x] Local Fabric server integration (runbook in scripts/e2e.ts; SKIP_PUBLISHER=1 for ingest+projection only)
+- [x] End-to-end demo against Ethereum mainnet (`pnpm service:test:e2e` with `DATABASE_URL` + `RPC_WSS_URL`; validates canonical blocks + fabric_scopes + fabric_objects)

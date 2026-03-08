@@ -91,7 +91,7 @@ const parseScope = (row: Record<string, unknown>): FabricScopeRow => ({
 })
 
 const parseCheckpoint = (row: Record<string, unknown> | undefined | null) => (
-	!row || row.scope_id === undefined ?
+	!row || row.scope_id === undefined || row.scope_id === null ?
 		null
 	: {
 			scopeId: parseString(row.scope_id, 'scope_id'),
@@ -376,4 +376,97 @@ export const markScopePublished = async (
 			lastError: null,
 		}),
 	])
+}
+
+export const getFabricBinding = async (
+	db: PublisherDb,
+	args: { scopeId: string, objectId: string },
+): Promise<{ classId: number, objectIx: bigint } | null> => {
+	const { rows } = await db.query(
+		`
+			select remote_class_id, remote_object_ix
+			from fabric_remote_bindings
+			where scope_id = $1 and object_id = $2
+		`,
+		[args.scopeId, args.objectId],
+	)
+	const row = rows[0]
+	return row ?
+		{
+			classId: parseNumber(row.remote_class_id, 'remote_class_id'),
+			objectIx: parseBigInt(row.remote_object_ix, 'remote_object_ix'),
+		}
+	:
+		null
+}
+
+export const getObjectIdByFabricName = async (
+	db: PublisherDb,
+	args: { scopeId: string, fabricName: string },
+): Promise<string | null> => {
+	const { rows } = await db.query(
+		`
+			select object_id
+			from fabric_remote_bindings
+			where scope_id = $1 and fabric_name = $2
+		`,
+		[args.scopeId, args.fabricName],
+	)
+	const row = rows[0]
+	return row ?
+		parseString(row.object_id, 'object_id')
+	:
+		null
+}
+
+export const upsertFabricBinding = async (
+	db: PublisherDb,
+	args: {
+		scopeId: string
+		objectId: string
+		remoteClassId: number
+		remoteObjectIx: bigint
+		lastSeenRevision: bigint
+		fabricName?: string | null
+	},
+) => {
+	await db.query(
+		`
+			insert into fabric_remote_bindings (
+				scope_id,
+				object_id,
+				remote_class_id,
+				remote_object_ix,
+				last_seen_revision,
+				last_seen_at,
+				fabric_name
+			)
+			values ($1, $2, $3, $4, $5, now(), $6)
+			on conflict (scope_id, object_id) do update
+			set
+				remote_class_id = excluded.remote_class_id,
+				remote_object_ix = excluded.remote_object_ix,
+				last_seen_revision = excluded.last_seen_revision,
+				last_seen_at = now(),
+				fabric_name = excluded.fabric_name
+		`,
+		[
+			args.scopeId,
+			args.objectId,
+			args.remoteClassId,
+			args.remoteObjectIx.toString(),
+			args.lastSeenRevision.toString(),
+			args.fabricName ?? null,
+		],
+	)
+}
+
+export const deleteFabricBinding = async (
+	db: PublisherDb,
+	args: { scopeId: string, objectId: string },
+) => {
+	await db.query(
+		`delete from fabric_remote_bindings where scope_id = $1 and object_id = $2`,
+		[args.scopeId, args.objectId],
+	)
 }

@@ -535,6 +535,12 @@ For the current upstream target:
 - rich blockchain metadata is adapter-dependent
 - if we need strong metadata guarantees everywhere, we will need either a sidecar writer or an upstream fork
 
+### V1 metadata sidecar strategy (chosen)
+
+- **Publish**: hierarchy, name, type, transform, bound, resource only via upstream object actions. Do not write `*:info` sidecars in v1.
+- **Store**: full `metadata_json` in desired state (Postgres); use for projection and future publication paths.
+- **Expose**: when the target supports info sidecars or after an upstream fork, add an optional info-sidecar write path; until then, keep the world navigable and metadata-light per the spec priority order.
+
 ## Attachment Contract
 
 ### Attachment encoding
@@ -634,11 +640,12 @@ This spec is good enough for implementation when:
 
 ## Implementation Status
 
-- [ ] Project-owned `FabricAdapter` interface added
-- [ ] Socket.IO implementation for `MSF_Map_Svc` added
-- [ ] Explicit create/delete matrix encoded in adapter
-- [ ] Remote subtree discovery implemented
-- [ ] Stable `object_id -> remote numeric id` resolution implemented
-- [ ] `RMPObject` move path implemented
-- [ ] Metadata sidecar strategy chosen
-- [ ] Capability probe implemented
+- [x] Project-owned `FabricAdapter` interface added
+- [x] Socket.IO implementation for `MSF_Map_Svc` added
+- [x] Explicit create/delete matrix encoded in adapter
+- [x] Remote subtree discovery implemented
+- [x] Stable `object_id -> remote numeric id` resolution implemented
+- [x] `RMPObject` move path implemented
+- [x] Metadata sidecar strategy chosen
+- [x] Capability probe implemented
+- [x] `fabric_remote_bindings` table and persist/read path implemented

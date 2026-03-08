@@ -74,4 +74,48 @@ describe('materializeDistrictAtlas', () => {
 			familyLabel: 'erc20',
 		})
 	})
+
+	it('is deterministic: same inputs produce identical outputs (full rebuild parity)', () => {
+		const args = {
+			config: {
+				databaseUrl: 'postgres://blockhead:blockhead@localhost:5432/blockhead',
+				chainId: 1n,
+				projectionPollIntervalMs: 1000,
+				spineRecentBlockCount: 256,
+				maxTxPulsesPerBlock: 24,
+				spineBlockSpacing: 24,
+				districtSpacing: 256,
+				slotSpacing: 12,
+				topContractLandmarksPerDistrict: 8,
+				projectionVersion: 1n,
+				districtAlgorithmVersion: 1n,
+				anchorAlgorithmVersion: 1n,
+				corridorAlgorithmVersion: 1n,
+				surfaceAlgorithmVersion: 1n,
+			},
+			entities: [
+				{
+					address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+					isContract: false,
+					lastSeenBlock: 99n,
+					familyLabel: null,
+				},
+				{
+					address: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+					isContract: true,
+					lastSeenBlock: 100n,
+					familyLabel: 'erc20',
+				},
+			],
+			headBlockNumber: 100n,
+		} as const
+
+		const result1 = materializeDistrictAtlas(args)
+		const result2 = materializeDistrictAtlas(args)
+
+		expect(result1.districts).toEqual(result2.districts)
+		expect(result1.memberships).toEqual(result2.memberships)
+		expect(result1.anchors).toEqual(result2.anchors)
+		expect(result1.state).toEqual(result2.state)
+	})
 })
