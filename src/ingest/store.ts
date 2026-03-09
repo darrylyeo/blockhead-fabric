@@ -545,9 +545,10 @@ export const applyCanonicalBatch = async ({
 		}
 	}
 
+	const firstBlock = batch.blocks[0] ? normalizeCanonicalBlock(batch.blocks[0] as CanonicalBlock) : undefined
 	const lastBlock = batch.blocks.at(-1) ? normalizeCanonicalBlock(batch.blocks.at(-1) as CanonicalBlock) : undefined
 
-	if (!lastBlock) {
+	if (!firstBlock || !lastBlock) {
 		return
 	}
 
@@ -576,7 +577,7 @@ export const applyCanonicalBatch = async ({
 	await enqueueProjectionJob({
 		db,
 		chainId: config.chainId,
-		fromBlockNumber: batch.blocks[0].header.number,
+		fromBlockNumber: firstBlock.header.number,
 		toBlockNumber: lastBlock.header.number,
 		projectionJobCoalesceGap: config.projectionJobCoalesceGap,
 	})

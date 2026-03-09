@@ -106,6 +106,16 @@ const createHttpProvider = (config: ReturnType<typeof loadConfig>) => {
 	}
 }
 
+const getBatchBlockRangeForLogs = (blocks: ReadonlyArray<{
+	header?: {
+		number?: bigint
+	}
+}>) => ({
+	fromBlock: blocks[0]?.header?.number?.toString() ?? '?',
+	toBlock: blocks.at(-1)?.header?.number?.toString() ?? '?',
+	blockCount: blocks.length,
+})
+
 const withTransaction = async <T>({
 	db,
 	fn,
@@ -413,9 +423,7 @@ const runWatchRound = async ({
 					{
 						source: 'watch',
 						type: event.type,
-						fromBlock: event.blocks[0]?.header.number.toString(),
-						toBlock: event.blocks.at(-1)?.header.number.toString(),
-						blockCount: event.blocks.length,
+						...getBatchBlockRangeForLogs(event.blocks),
 						chainHead: event.metadata.chainHead.toString(),
 					},
 			)
@@ -482,9 +490,7 @@ const runWatchRound = async ({
 				{
 					source: 'watch',
 					type: event.type,
-					fromBlock: event.blocks[0]?.header.number.toString(),
-					toBlock: event.blocks.at(-1)?.header.number.toString(),
-					blockCount: event.blocks.length,
+					...getBatchBlockRangeForLogs(event.blocks),
 					chainHead: event.metadata.chainHead.toString(),
 				},
 		)
