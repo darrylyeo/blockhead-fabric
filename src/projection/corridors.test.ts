@@ -169,7 +169,7 @@ describe('materializeCorridors', () => {
 			objectId === 'corridor:1:d_aa:d_bb:native_transfer:eth:32'
 		))).toMatchObject({
 			resourceReference: 'action://objects/blockhead-beam-native.gltf',
-			resourceName: 'blockhead-beam-native.gltf',
+			resourceName: 'objects/blockhead-beam-native.gltf',
 			metadataJson: expect.objectContaining({
 			entityKind: 'corridor',
 			sourceDistrictId: 'd_aa',

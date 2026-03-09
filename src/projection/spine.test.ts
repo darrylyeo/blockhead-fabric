@@ -101,7 +101,7 @@ describe('materializeLatestSpine', () => {
 			z: 30,
 		})
 		expect(projection.objects[3]?.resourceReference).toBe('action://objects/blockhead-finalized.gltf')
-		expect(projection.objects[3]?.resourceName).toBe('blockhead-finalized.gltf')
+		expect(projection.objects[3]?.resourceName).toBe('objects/blockhead-finalized.gltf')
 		expect(projection.objects[3]?.metadataJson).toMatchObject({
 			entityId: 'block:1:101',
 			entityKind: 'block',

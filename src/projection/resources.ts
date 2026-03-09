@@ -1,5 +1,6 @@
+/** Full path so Manifolder's NodeAdapter (which uses sName for action://) resolves correctly. */
 const resource = (name: string) => ({
-	resourceName: name,
+	resourceName: `objects/${name}`,
 	resourceReference: `action://objects/${name}`,
 })
 
