@@ -167,13 +167,17 @@ describe('materializeCorridors', () => {
 		))).toContain('district:1:d_bb')
 		expect(result.objects.find(({ objectId }) => (
 			objectId === 'corridor:1:d_aa:d_bb:native_transfer:eth:32'
-		))?.metadataJson).toMatchObject({
+		))).toMatchObject({
+			resourceReference: 'action://objects/blockhead-beam-native.gltf',
+			resourceName: 'blockhead-beam-native.gltf',
+			metadataJson: expect.objectContaining({
 			entityKind: 'corridor',
 			sourceDistrictId: 'd_aa',
 			targetDistrictId: 'd_bb',
 			flowClass: 'native_transfer',
 			tokenClass: 'eth',
 			window: 32,
+			}),
 		})
 	})
 

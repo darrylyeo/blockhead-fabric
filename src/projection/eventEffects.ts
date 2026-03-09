@@ -1,9 +1,13 @@
+import { blockScaleByNumber, eventOffset, selectTxPulseGroups, txPulseVisuals } from './blockActivityLayout.js'
+import { eventResource } from './resources.js'
+
 import type {
 	EventEffectLog,
 	ProjectedFabricObject,
 	ProjectionConfig,
 	SpineBlock,
 } from './types.js'
+import type { TxPulseInput } from './blockActivityLayout.js'
 
 const ercTransferTopic0 = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
 const erc1155TransferSingleTopic0 = '0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62'
@@ -40,25 +44,6 @@ const topicAddress = (topic: string | null) => (
 		`0x${topic.slice(-40).toLowerCase()}`
 )
 
-const transform = (logIndex: number) => ({
-	position: {
-		x: (logIndex % 8) * 2 - 7,
-		y: 2 + Math.floor(logIndex / 8),
-		z: 0,
-	},
-	rotation: {
-		x: 0,
-		y: 0,
-		z: 0,
-		w: 1,
-	},
-	scale: {
-		x: 1,
-		y: 1,
-		z: 1,
-	},
-})
-
 const metadata = (args: {
 	chainId: bigint
 	log: EventEffectLog
@@ -83,6 +68,7 @@ export const materializeEventEffects = (args: {
 	config: ProjectionConfig
 	blocks: SpineBlock[]
 	logs: EventEffectLog[]
+	transactions: TxPulseInput[]
 }) => {
 	const scopeId = args.config.chainId === 1n ?
 		'scope_eth_mainnet'
@@ -93,6 +79,35 @@ export const materializeEventEffects = (args: {
 			blockNumber.toString()
 		)),
 	)
+	const blockScales = blockScaleByNumber(args.blocks)
+	const txPulsePositions = new Map(
+		selectTxPulseGroups({
+			config: args.config,
+			headBlockNumber: args.blocks.at(-1)?.blockNumber ?? 0n,
+			blocks: args.blocks,
+			transactions: args.transactions,
+			recentWindowSize: 32n,
+		}).flatMap(({ blockNumber, transactions }) => (
+			transactions.map((transaction, index) => {
+				const visuals = txPulseVisuals({
+					blockScale: blockScales.get(blockNumber) ?? {
+						x: 10,
+						y: 6,
+						z: 10,
+					},
+					index,
+					count: transactions.length,
+					transaction,
+				})
+
+				return [
+					`${blockNumber}:${transaction.txHash}`,
+					visuals.position,
+				] as const
+			})
+		)),
+	)
+	const eventIndexes = new Map<string, number>()
 
 	return args.logs
 		.filter(({ blockNumber }) => (
@@ -100,6 +115,17 @@ export const materializeEventEffects = (args: {
 		))
 		.flatMap((log) => {
 			const eventFamily = classifyEventFamily(log)
+			const txKey = `${log.blockNumber.toString()}:${log.txHash}`
+			const eventIndex = eventIndexes.get(txKey) ?? 0
+			const pulsePosition = txPulsePositions.get(txKey)
+			const offset = eventOffset(eventIndex)
+			const scale = {
+				x: eventFamily === 'erc721_transfer' ? 1.2 : 0.9,
+				y: eventFamily === 'erc20_transfer' ? 0.9 : 1.1,
+				z: eventFamily === 'erc1155_transfer_batch' ? 1.4 : 0.9,
+			}
+
+			eventIndexes.set(txKey, eventIndex + 1)
 
 			return eventFamily ?
 				[
@@ -113,14 +139,29 @@ export const materializeEventEffects = (args: {
 						type: 0,
 						subtype: 0,
 						name: familyName(eventFamily),
-						transformJson: transform(log.logIndex),
-						boundJson: {
-							x: 2,
-							y: 2,
-							z: 2,
+						transformJson: {
+							position: pulsePosition ?
+								{
+									x: pulsePosition.x + offset.x,
+									y: pulsePosition.y + offset.y,
+									z: pulsePosition.z + offset.z,
+								}
+							:
+								{
+									x: offset.x + (((log.logIndex % 5) - 2) * 2.5),
+									y: (blockScales.get(log.blockNumber.toString())?.y ?? 6) + offset.y,
+									z: offset.z + ((Math.floor(log.logIndex / 5) - 1) * 2.5),
+								},
+							rotation: {
+								x: 0,
+								y: 0,
+								z: 0,
+								w: 1,
+							},
+							scale,
 						},
-						resourceReference: null,
-						resourceName: null,
+						boundJson: scale,
+						...eventResource(eventFamily),
 						metadataJson: metadata({
 							chainId: args.config.chainId,
 							log,

@@ -10,6 +10,10 @@ RUN git clone --recurse-submodules --depth 1 https://github.com/MetaversalCorp/M
 WORKDIR /build/dist
 RUN npm install
 
+COPY web/ /build/dist/web/
+COPY generate-blockhead-assets.mjs /usr/local/bin/
+RUN node /usr/local/bin/generate-blockhead-assets.mjs /build/dist/web/objects
+
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 

@@ -73,6 +73,15 @@ describe('materializeDistrictAtlas', () => {
 			entityKind: 'contract',
 			familyLabel: 'erc20',
 		})
+		expect(projection.state.objects.find(({ objectId }) => (
+			objectId.startsWith('district:1:d_')
+		))?.resourceReference).toBe('action://objects/blockhead-district.gltf')
+		expect(projection.state.objects.find(({ objectId }) => (
+			objectId === 'account:1:0x1111111111111111111111111111111111111111'
+		))?.resourceReference).toBe('action://objects/blockhead-account.gltf')
+		expect(projection.state.objects.find(({ objectId }) => (
+			objectId === 'contract:1:0x2222222222222222222222222222222222222222'
+		))?.resourceReference).toBe('action://objects/blockhead-token.gltf')
 	})
 
 	it('is deterministic: same inputs produce identical outputs (full rebuild parity)', () => {

@@ -104,24 +104,28 @@ describe('materializeAttachmentCandidates', () => {
 				parentObjectId: 'root',
 				classId: 72,
 				name: 'Inspect Pool',
+				resourceReference: 'action://objects/blockhead-district.gltf',
 			}),
 			expect.objectContaining({
 				scopeId: 'scope_attachment_1_amm_pool_inspect_7777777777777777777777777777777777777777',
 				objectId: 'contract:1:0x7777777777777777777777777777777777777777',
 				parentObjectId: 'entry_inspect_attachment',
-				resourceName: 'amm-pool',
+				resourceReference: 'action://objects/blockhead-pool.gltf',
+				resourceName: 'blockhead-pool.gltf',
 			}),
 			expect.objectContaining({
 				scopeId: 'scope_attachment_1_amm_pool_inspect_7777777777777777777777777777777777777777',
 				objectId: 'container:inspect:surfaces',
 				parentObjectId: 'entry_inspect_attachment',
 				classId: 72,
+				resourceReference: 'action://objects/blockhead-district.gltf',
 			}),
 			expect.objectContaining({
 				scopeId: 'scope_attachment_1_amm_pool_inspect_7777777777777777777777777777777777777777',
 				objectId: 'surface:contract:1:0x7777777777777777777777777777777777777777:reserve0',
 				parentObjectId: 'container:inspect:surfaces',
-				resourceName: 'state-surface',
+				resourceReference: 'action://objects/blockhead-state-in.gltf',
+				resourceName: 'blockhead-state-in.gltf',
 			}),
 		]))
 		expect(result.objects).toHaveLength(7)

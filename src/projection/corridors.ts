@@ -1,3 +1,5 @@
+import { clamp, corridorResource, yawRotation } from './resources.js'
+
 import type {
 	CorridorRow,
 	DistrictAtlasEntity,
@@ -94,22 +96,24 @@ const transform = (args: {
 	source: DistrictRow
 	target: DistrictRow
 	flowClass: string
+	eventCount: number
 }) => ({
 	position: {
-		x: (args.source.originX + args.target.originX) / 2,
-		y: yByFlowClass(args.flowClass),
-		z: (args.source.originZ + args.target.originZ) / 2,
+		x: (args.target.originX - args.source.originX) / 2,
+		y: 18 + yByFlowClass(args.flowClass),
+		z: (args.target.originZ - args.source.originZ) / 2,
 	},
-	rotation: {
-		x: 0,
-		y: 0,
-		z: 0,
-		w: 1,
-	},
+	rotation: yawRotation(Math.atan2(
+		args.target.originX - args.source.originX,
+		args.target.originZ - args.source.originZ,
+	)),
 	scale: {
-		x: 1,
-		y: 1,
-		z: 1,
+		x: clamp(2 + (args.eventCount / 6), 2, 10),
+		y: args.flowClass === 'contract_call' ? 2.4 : 1.6,
+		z: Math.max(16, Math.hypot(
+			args.target.originX - args.source.originX,
+			args.target.originZ - args.source.originZ,
+		)),
 	},
 })
 
@@ -410,14 +414,14 @@ export const materializeCorridors = (args: {
 							source,
 							target,
 							flowClass: corridor.flowClass,
+							eventCount: corridor.eventCount,
 						}),
 						boundJson: bounds({
 							source,
 							target,
 							eventCount: corridor.eventCount,
 						}),
-						resourceReference: null,
-						resourceName: null,
+						...corridorResource(corridor.flowClass),
 						metadataJson: {
 							schemaVersion: 1,
 							entityId: corridorObjectId(args.config.chainId, corridor),

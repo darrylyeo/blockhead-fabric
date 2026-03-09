@@ -1,6 +1,12 @@
 import { Hex } from '@tevm/voltaire/Hex'
 import { Keccak256 } from '@tevm/voltaire/Keccak256'
 
+import {
+	accountResource,
+	contractResource,
+	districtResource,
+} from './resources.js'
+
 import type {
 	DistrictAtlasEntity,
 	DistrictMembershipRow,
@@ -83,28 +89,28 @@ const parseNibble = (value: string) => (
 )
 
 const districtOrigin = (districtKeyValue: string, districtSpacing: number) => ({
-	x: parseNibble(districtKeyValue[0] ?? '0') * districtSpacing,
+	x: (parseNibble(districtKeyValue[0] ?? '0') * districtSpacing) + (districtSpacing / 2),
 	y: 0,
-	z: parseNibble(districtKeyValue[1] ?? '0') * districtSpacing,
+	z: (parseNibble(districtKeyValue[1] ?? '0') * districtSpacing) + (districtSpacing / 2),
 })
 
 const slot = (address: string, slotSpacing: number) => {
 	const hash = hashAddress(address)
 
 	return {
-		x: (Number.parseInt(hash.slice(6, 10), 16) % 16) * slotSpacing,
+		x: ((Number.parseInt(hash.slice(6, 10), 16) % 16) - 7.5) * slotSpacing,
 		y: 0,
-		z: (Number.parseInt(hash.slice(10, 14), 16) % 16) * slotSpacing,
+		z: ((Number.parseInt(hash.slice(10, 14), 16) % 16) - 7.5) * slotSpacing,
 		key: hash.slice(6, 14),
 	}
 }
 
 const adjustedSlot = (entity: DistrictAtlasEntity, slotValue: ReturnType<typeof slot>, districtSpacing: number) => (
-	entity.isContract && slotValue.x >= 24 && slotValue.z >= 24 && slotValue.x - 24 < districtSpacing && slotValue.z - 24 < districtSpacing ?
+	entity.isContract && slotValue.x >= -((districtSpacing / 2) - 24) && slotValue.z >= -((districtSpacing / 2) - 24) && slotValue.x + 24 < districtSpacing / 2 && slotValue.z + 24 < districtSpacing / 2 ?
 		{
 			...slotValue,
-			x: slotValue.x - 24,
-			z: slotValue.z - 24,
+			x: slotValue.x - 18,
+			z: slotValue.z - 18,
 		}
 	:
 		slotValue
@@ -230,8 +236,7 @@ export const materializeDistrictAtlas = (args: {
 			name: 'District Atlas',
 			transformJson: transform(0, 0, 0),
 			boundJson: null,
-			resourceReference: null,
-			resourceName: null,
+			...districtResource(),
 			metadataJson: {
 				schemaVersion: 1,
 				entityId: `entry:district-atlas:${args.config.chainId.toString()}`,
@@ -265,14 +270,30 @@ export const materializeDistrictAtlas = (args: {
 			type: 0,
 			subtype: 0,
 			name: `District ${district.districtId.slice(2).toUpperCase()}`,
-			transformJson: transform(district.originX, district.originY, district.originZ),
+			transformJson: {
+				position: {
+					x: district.originX,
+					y: 1,
+					z: district.originZ,
+				},
+				rotation: {
+					x: 0,
+					y: 0,
+					z: 0,
+					w: 1,
+				},
+				scale: {
+					x: args.config.districtSpacing * 0.82,
+					y: 2,
+					z: args.config.districtSpacing * 0.82,
+				},
+			},
 			boundJson: {
 				x: args.config.districtSpacing,
 				y: 8,
 				z: args.config.districtSpacing,
 			},
-			resourceReference: null,
-			resourceName: null,
+			...districtResource(),
 			metadataJson: districtMetadata(args.config.chainId, district),
 			deleted: false,
 			desiredRevision,
@@ -336,6 +357,19 @@ export const materializeDistrictAtlas = (args: {
 					updatedAtBlock: desiredRevision,
 				})
 
+				const scale = entity.isContract ?
+					{
+						x: 8,
+						y: 12,
+						z: 8,
+					}
+				:
+					{
+						x: 5,
+						y: 5,
+						z: 5,
+					}
+
 				objects.push({
 					scopeId,
 					objectId: entityIdValue,
@@ -346,14 +380,31 @@ export const materializeDistrictAtlas = (args: {
 					type: 0,
 					subtype: 0,
 					name: label(entity.address),
-					transformJson: transform(anchorX, 0, anchorZ),
+					transformJson: {
+						position: {
+							x: anchorX,
+							y: 1 + (scale.y / 2),
+							z: anchorZ,
+						},
+						rotation: {
+							x: 0,
+							y: 0,
+							z: 0,
+							w: 1,
+						},
+						scale,
+					},
 					boundJson: {
 						x: entity.isContract ? 8 : 4,
 						y: entity.isContract ? 8 : 4,
 						z: entity.isContract ? 8 : 4,
 					},
-					resourceReference: null,
-					resourceName: null,
+					...(
+						entity.isContract ?
+							contractResource(entity.familyLabel)
+						:
+							accountResource()
+					),
 					metadataJson: metadata(
 						args.config.chainId,
 						entity,

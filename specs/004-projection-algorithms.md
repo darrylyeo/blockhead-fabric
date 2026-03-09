@@ -144,9 +144,23 @@ For block `n`:
 
 ```text
 x = 0
-y = finalityBand(finalityState)
+y = finalityBand(finalityState) + (blockHeight / 2)
 z = (n - windowStart) * blockSpacing
 ```
+
+Where `blockHeight` and the visible block footprint are derived deterministically from activity:
+
+```text
+blockWidth  = f(logCount, gasUsed)
+blockHeight = f(txCount, gasUsed)
+blockDepth  = f(txCount)
+```
+
+Rule:
+
+- blocks should read as physical slices rather than zero-height markers
+- denser blocks should become visibly taller / wider
+- finality remains encoded by both lane height and resource family
 
 Recommended finality bands:
 
@@ -163,6 +177,14 @@ bound.x = widthBucket(logCount, gasUsed)
 bound.y = 4
 bound.z = depthBucket(txCount)
 ```
+
+### Resource family
+
+Use deterministic block solids by finality state:
+
+- `latest -> blockhead-latest.gltf`
+- `safe -> blockhead-safe.gltf`
+- `finalized -> blockhead-finalized.gltf`
 
 Recommended V1 buckets:
 
@@ -279,8 +301,8 @@ Map district IDs onto a coarse 16x16 world grid.
 Formula:
 
 ```text
-districtX = parseHex(districtKey[0]) * DISTRICT_SPACING
-districtZ = parseHex(districtKey[1]) * DISTRICT_SPACING
+districtX = (parseHex(districtKey[0]) * DISTRICT_SPACING) + (DISTRICT_SPACING / 2)
+districtZ = (parseHex(districtKey[1]) * DISTRICT_SPACING) + (DISTRICT_SPACING / 2)
 districtOrigin = (districtX, 0, districtZ)
 ```
 
@@ -296,8 +318,8 @@ Formula:
 
 ```text
 slotHash = keccak(lowercaseAddress)
-localX = (slotHash[2..3] mod 16) * SLOT_SPACING
-localZ = (slotHash[4..5] mod 16) * SLOT_SPACING
+localX = ((slotHash[2..3] mod 16) - 7.5) * SLOT_SPACING
+localZ = ((slotHash[4..5] mod 16) - 7.5) * SLOT_SPACING
 localY = 0
 ```
 
@@ -317,7 +339,7 @@ Contracts get a small centrality bias so they appear more prominent.
 
 V1 rule:
 
-- if `isContract`, subtract `24` from both `localX` and `localZ` if doing so keeps them inside district bounds
+- if `isContract`, subtract roughly `18` from both `localX` and `localZ` when this keeps the object inside district bounds
 - if labeled as a major known protocol landmark, reserve one of a small set of central slots
 
 ### Collision handling
@@ -472,18 +494,27 @@ Corridor owner:
 
 Corridor transform:
 
-- midpoint between source and target district origins
-- slight `y` elevation by flow class
+- parent-local midpoint from source district origin to target district origin
+- elevated above the district floor so beams do not intersect most anchors
+- rotate around `y` so the beam points toward the target district
+- scale beam length to district-to-district distance
+- scale beam width to flow intensity
 
 Recommended `y`:
 
-- `native_transfer -> 2`
-- `erc20_transfer -> 4`
-- `contract_call -> 6`
+- `native_transfer -> 20`
+- `erc20_transfer -> 22`
+- `contract_call -> 24`
 
 Corridor bounds:
 
 - proportional to district-to-district distance and activity bucket
+
+Corridor resource family:
+
+- `native_transfer -> blockhead-beam-native.gltf`
+- `erc20_transfer -> blockhead-beam-erc20.gltf`
+- `contract_call -> blockhead-beam-call.gltf`
 
 ## State Surface Derivation
 
@@ -528,16 +559,19 @@ Recommended default mapping:
 
 ### Publication form
 
-V1 records surfaces in desired state as metadata or sidecar-compatible semantic payloads on the owning object.
+V1 keeps the metadata payload on the owning landmark object and also materializes child `surface:*` objects for visible protocol landmarks and inspect scopes.
 
 Current upstream note:
 
 - this does not imply current `MSF_Map_Svc` can write all surface data into first-class core object rows
 - publication may expose only a subset through current upstream fields unless sidecars or a fork are used
 
-Optional later extension:
+Current visual publication:
 
-- child surface objects for especially important landmarks
+- `activity_32` and analogous activity metrics -> pale activity bar
+- incoming / reserve-like metrics -> green bar
+- outgoing / transfer-like metrics -> red bar
+- event / batch-like metrics -> purple bar
 
 ## Event Effect Projection
 
@@ -573,6 +607,17 @@ Metadata:
 - `eventFamily`
 - `txHash`
 - `logIndex`
+
+Placement rule:
+
+- if the parent tx pulse is materialized, cluster event effects around that tx pulse in a small deterministic ring
+- otherwise place them in a deterministic fallback cluster above the block surface
+
+Resource family:
+
+- ERC-20 transfer -> `blockhead-event-erc20.gltf`
+- ERC-721 transfer -> `blockhead-event-erc721.gltf`
+- ERC-1155 transfer -> `blockhead-event-erc1155.gltf`
 
 ### Reorg rule
 
@@ -623,6 +668,19 @@ Sort by:
 
 Then keep the first `MAX_TX_PULSES_PER_BLOCK`.
 
+### Placement
+
+Place tx pulses on the top face of the owning block slice in a deterministic grid:
+
+- derive the usable top surface from the parent block scale
+- distribute kept txs across a compact grid
+- scale pulse height by gas / value magnitude
+- keep tx pulses above the block top so they read as internal block structure
+
+Resource family:
+
+- use `blockhead-tx.gltf`
+
 ## Protocol Landmark Promotion
 
 ### Purpose
@@ -647,6 +705,16 @@ Recommended:
 - `familyLabel`
 - `landmarkRank`
 - `districtId`
+
+### Current landmark layout
+
+For `protocol-landmarks`:
+
+- each family gets a large dark pad
+- family pads are separated laterally so ERC-20 / ERC-721 / ERC-1155 / AMM areas are distinct
+- contracts are placed in a deterministic 4-column grid within the family pad
+- landmark height scales with current semantic activity
+- child `surface:*` bars are attached to the landmark so current state reads physically around the contract
 
 ## Attachments And Partitioning
 
@@ -796,4 +864,8 @@ The projection layer is good enough for v1 when:
 - [x] State surface derivation implemented
 - [x] Event-effect projection implemented
 - [x] Attachment partitioning implemented
+- [x] Deterministic visual asset assignment implemented
+- [x] Top-surface tx pulse placement implemented
+- [x] Tx-local event clustering implemented
+- [x] Family pad + landmark state-bar layout implemented
 - [x] Full rebuild parity validated (determinism tests for spine, districts, corridors)

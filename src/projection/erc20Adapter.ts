@@ -12,6 +12,13 @@ import type {
 	ProjectionConfig,
 } from './types.js'
 import { materializeAmmPoolLandmarks } from './ammAdapter.js'
+import {
+	clamp,
+	contractResource,
+	districtResource,
+	magnitudeScale,
+	stateSurfaceResource,
+} from './resources.js'
 import { surfaceMetadata } from './stateSurfaces.js'
 
 const transferTopic0 = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
@@ -454,28 +461,201 @@ export const materializeErc1155Adapter = (args: {
 	}
 }
 
-const landmarkTransform = (contract: {
-	anchorX: number | null
-	anchorY: number | null
-	anchorZ: number | null
-}, index: number) => ({
-	position: {
-		x: contract.anchorX ?? 0,
-		y: (contract.anchorY ?? 0) + 12,
-		z: contract.anchorZ ?? index * 24,
-	},
-	rotation: {
-		x: 0,
-		y: 0,
-		z: 0,
-		w: 1,
-	},
-	scale: {
-		x: 1.25,
-		y: 1.25,
-		z: 1.25,
-	},
+type LandmarkContract = {
+	entityId: string
+	protocolLabel: string
+	familyLabel: string
+	districtId: string | null
+	activity32: number
+	eventCount32: number
+	incomingValue32?: string
+	outgoingValue32?: string
+	mintActivity32?: number
+	transferActivity32?: number
+	batchActivity32?: number
+	swapIntensity32?: number
+	reserve0?: string
+	reserve1?: string
+	extraMetadata: Record<string, unknown>
+}
+
+const landmarkScale = (contract: LandmarkContract) => ({
+	x: contract.familyLabel === 'amm_pool' ? 14 : contract.familyLabel === 'erc20' ? 12 : 10,
+	y: clamp(
+		10
+		+ (Math.log2(contract.activity32 + contract.eventCount32 + 2) * 2)
+		+ magnitudeScale(contract.swapIntensity32 ?? contract.transferActivity32 ?? contract.incomingValue32 ?? '0', 0, 6, 4),
+		10,
+		24,
+	),
+	z: contract.familyLabel === 'amm_pool' ? 14 : 10,
 })
+
+const landmarkTransform = (contract: LandmarkContract, index: number) => {
+	const scale = landmarkScale(contract)
+
+	return {
+		position: {
+			x: ((index % 4) - 1.5) * 42,
+			y: 4 + (scale.y / 2),
+			z: Math.floor(index / 4) * 42,
+		},
+		rotation: {
+			x: 0,
+			y: 0,
+			z: 0,
+			w: 1,
+		},
+		scale,
+	}
+}
+
+const stateMetricSpecs = (contract: LandmarkContract) => (
+	[
+		{
+			surfaceId: 'activity_32',
+			name: 'Activity 32',
+			value: contract.activity32,
+			x: -14,
+			z: -8,
+		},
+		{
+			surfaceId: 'event_count_32',
+			name: 'Event Count 32',
+			value: contract.eventCount32,
+			x: 14,
+			z: -8,
+		},
+		...(
+			contract.familyLabel === 'erc20' ?
+				[
+					{
+						surfaceId: 'incoming_value_32',
+						name: 'Incoming Value 32',
+						value: contract.incomingValue32 ?? '0',
+						x: -14,
+						z: 10,
+					},
+					{
+						surfaceId: 'outgoing_value_32',
+						name: 'Outgoing Value 32',
+						value: contract.outgoingValue32 ?? '0',
+						x: 14,
+						z: 10,
+					},
+				]
+			: contract.familyLabel === 'erc721' ?
+				[
+					{
+						surfaceId: 'mint_activity_32',
+						name: 'Mint Activity 32',
+						value: contract.mintActivity32 ?? 0,
+						x: -14,
+						z: 10,
+					},
+					{
+						surfaceId: 'transfer_activity_32',
+						name: 'Transfer Activity 32',
+						value: contract.transferActivity32 ?? 0,
+						x: 14,
+						z: 10,
+					},
+				]
+			: contract.familyLabel === 'erc1155' ?
+				[
+					{
+						surfaceId: 'batch_activity_32',
+						name: 'Batch Activity 32',
+						value: contract.batchActivity32 ?? 0,
+						x: -14,
+						z: 10,
+					},
+					{
+						surfaceId: 'transfer_activity_32',
+						name: 'Transfer Activity 32',
+						value: contract.transferActivity32 ?? 0,
+						x: 14,
+						z: 10,
+					},
+				]
+			:
+				[
+					{
+						surfaceId: 'reserve0',
+						name: 'Reserve 0',
+						value: contract.reserve0 ?? '0',
+						x: -14,
+						z: 10,
+					},
+					{
+						surfaceId: 'reserve1',
+						name: 'Reserve 1',
+						value: contract.reserve1 ?? '0',
+						x: 14,
+						z: 10,
+					},
+				]
+		),
+	]
+)
+
+const stateMetricObjects = (args: {
+	scopeId: string
+	entrypointId: string
+	chainId: bigint
+	desiredRevision: bigint
+	contract: LandmarkContract
+}) => (
+	stateMetricSpecs(args.contract).map((metric) => {
+		const scale = {
+			x: 3,
+			y: clamp(2 + (magnitudeScale(metric.value, 0, 8, 3) * 4), 2, 10),
+			z: 3,
+		}
+
+		return {
+			scopeId: args.scopeId,
+			objectId: `surface:${args.contract.entityId}:${metric.surfaceId}`,
+			entrypointId: args.entrypointId,
+			parentObjectId: args.contract.entityId,
+			entityId: `surface:${args.contract.entityId}:${metric.surfaceId}`,
+			classId: 73,
+			type: 0,
+			subtype: 0,
+			name: metric.name,
+			transformJson: {
+				position: {
+					x: metric.x,
+					y: 1 + (scale.y / 2),
+					z: metric.z,
+				},
+				rotation: {
+					x: 0,
+					y: 0,
+					z: 0,
+					w: 1,
+				},
+				scale,
+			},
+			boundJson: scale,
+			...stateSurfaceResource(metric.surfaceId),
+			metadataJson: {
+				schemaVersion: 1,
+				entityId: `surface:${args.contract.entityId}:${metric.surfaceId}`,
+				entityKind: 'surface',
+				chainId: Number(args.chainId),
+				canonical: true,
+				updatedAtBlock: args.desiredRevision.toString(),
+				parentEntityId: args.contract.entityId,
+				surfaceId: metric.surfaceId,
+				value: metric.value,
+			},
+			deleted: false,
+			desiredRevision: args.desiredRevision,
+			updatedAtBlock: args.desiredRevision,
+		} satisfies ProjectedFabricObject
+	})
+)
 
 export const materializeProtocolLandmarks = (args: {
 	config: ProjectionConfig
@@ -497,7 +677,6 @@ export const materializeProtocolLandmarks = (args: {
 			containerName: 'ERC-20 Tokens',
 			containerX: 0,
 			familyLabel: 'erc20',
-			resourceName: 'erc20-token',
 			contracts: [
 				...args.tokenContracts,
 			]
@@ -530,9 +709,8 @@ export const materializeProtocolLandmarks = (args: {
 		{
 			containerId: 'container:protocol:erc721',
 			containerName: 'ERC-721 Collections',
-			containerX: 96,
+			containerX: 196,
 			familyLabel: 'erc721',
-			resourceName: 'erc721-collection',
 			contracts: [
 				...args.collectionContracts,
 			]
@@ -562,9 +740,8 @@ export const materializeProtocolLandmarks = (args: {
 		{
 			containerId: 'container:protocol:erc1155',
 			containerName: 'ERC-1155 Collections',
-			containerX: 192,
+			containerX: 392,
 			familyLabel: 'erc1155',
-			resourceName: 'erc1155-collection',
 			contracts: [
 				...args.multiTokenContracts,
 			]
@@ -613,7 +790,7 @@ export const materializeProtocolLandmarks = (args: {
 			transformJson: {
 				position: {
 					x: 0,
-					y: 0,
+					y: 1,
 					z: 0,
 				},
 				rotation: {
@@ -623,14 +800,17 @@ export const materializeProtocolLandmarks = (args: {
 					w: 1,
 				},
 				scale: {
-					x: 1,
-					y: 1,
-					z: 1,
+					x: 168,
+					y: 2,
+					z: 148,
 				},
 			},
-			boundJson: null,
-			resourceReference: null,
-			resourceName: null,
+			boundJson: {
+				x: 168,
+				y: 6,
+				z: 148,
+			},
+			...districtResource(),
 			metadataJson: {
 				schemaVersion: 1,
 				entityId: `entry:protocol-landmarks:${args.config.chainId.toString()}`,
@@ -658,8 +838,8 @@ export const materializeProtocolLandmarks = (args: {
 					transformJson: {
 						position: {
 							x: family.containerX,
-							y: 0,
-							z: 0,
+							y: 1,
+							z: Math.max(52, Math.ceil(family.contracts.length / 4) * 22),
 						},
 						rotation: {
 							x: 0,
@@ -668,18 +848,17 @@ export const materializeProtocolLandmarks = (args: {
 							w: 1,
 						},
 						scale: {
-							x: 1,
-							y: 1,
-							z: 1,
+							x: 140,
+							y: 2,
+							z: Math.max(92, (Math.ceil(family.contracts.length / 4) * 44) + 32),
 						},
 					},
 					boundJson: {
-						x: 64,
+						x: 140,
 						y: 16,
-						z: Math.max(24, family.contracts.length * 24),
+						z: Math.max(92, (Math.ceil(family.contracts.length / 4) * 44) + 32),
 					},
-					resourceReference: null,
-					resourceName: null,
+					...districtResource(),
 					metadataJson: {
 						schemaVersion: 1,
 						entityId: `${family.containerId}:${args.config.chainId.toString()}`,
@@ -693,41 +872,49 @@ export const materializeProtocolLandmarks = (args: {
 					desiredRevision,
 					updatedAtBlock: desiredRevision,
 				} satisfies ProjectedFabricObject,
-				...family.contracts.map((contract, index) => ({
-					scopeId,
-					objectId: contract.entityId,
-					entrypointId: 'entry_protocol_landmarks',
-					parentObjectId: family.containerId,
-					entityId: contract.entityId,
-					classId: 73,
-					type: 0,
-					subtype: 0,
-					name: contract.protocolLabel,
-					transformJson: landmarkTransform(contract, index),
-					boundJson: {
-						x: 10,
-						y: 10,
-						z: 10,
-					},
-					resourceReference: null,
-					resourceName: family.resourceName,
-					metadataJson: {
-						schemaVersion: 1,
-						entityId: contract.entityId,
-						entityKind: 'contract',
-						chainId: Number(args.config.chainId),
-						canonical: true,
-						updatedAtBlock: desiredRevision.toString(),
-						protocolLabel: contract.protocolLabel,
-						familyLabel: contract.familyLabel,
-						landmarkRank: index,
-						districtId: contract.districtId,
-						...contract.extraMetadata,
-					},
-					deleted: false,
-					desiredRevision,
-					updatedAtBlock: desiredRevision,
-				} satisfies ProjectedFabricObject)),
+				...family.contracts.flatMap((contract, index) => {
+					const transformJson = landmarkTransform(contract, index)
+
+					return [
+						{
+							scopeId,
+							objectId: contract.entityId,
+							entrypointId: 'entry_protocol_landmarks',
+							parentObjectId: family.containerId,
+							entityId: contract.entityId,
+							classId: 73,
+							type: 0,
+							subtype: 0,
+							name: contract.protocolLabel,
+							transformJson,
+							boundJson: transformJson.scale,
+							...contractResource(contract.familyLabel),
+							metadataJson: {
+								schemaVersion: 1,
+								entityId: contract.entityId,
+								entityKind: 'contract',
+								chainId: Number(args.config.chainId),
+								canonical: true,
+								updatedAtBlock: desiredRevision.toString(),
+								protocolLabel: contract.protocolLabel,
+								familyLabel: contract.familyLabel,
+								landmarkRank: index,
+								districtId: contract.districtId,
+								...contract.extraMetadata,
+							},
+							deleted: false,
+							desiredRevision,
+							updatedAtBlock: desiredRevision,
+						} satisfies ProjectedFabricObject,
+						...stateMetricObjects({
+							scopeId,
+							entrypointId: 'entry_protocol_landmarks',
+							chainId: args.config.chainId,
+							desiredRevision,
+							contract,
+						}),
+					]
+				}),
 			]
 		)),
 	]

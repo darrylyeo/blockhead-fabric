@@ -353,6 +353,13 @@ export const runProjectionRound = async (args: {
 					chainId: args.config.chainId,
 				}),
 			})
+		const recentTxPulses = !headBlock ?
+			[]
+		:
+			await loadRecentTxPulses(client, {
+				chainId: args.config.chainId,
+				fromBlockNumber: txPulseFromBlockNumber,
+			})
 		const txPulses = !headBlock ?
 			[]
 		:
@@ -360,10 +367,7 @@ export const runProjectionRound = async (args: {
 				config: args.config,
 				headBlockNumber: headBlock.blockNumber,
 				blocks,
-				transactions: await loadRecentTxPulses(client, {
-					chainId: args.config.chainId,
-					fromBlockNumber: txPulseFromBlockNumber,
-				}),
+				transactions: recentTxPulses,
 			})
 		const eventEffects = !headBlock ?
 			[]
@@ -371,6 +375,7 @@ export const runProjectionRound = async (args: {
 			materializeEventEffects({
 				config: args.config,
 				blocks,
+				transactions: recentTxPulses,
 				logs: await loadEventEffectLogs(client, {
 					chainId: args.config.chainId,
 					fromBlockNumber: spineFromBlockNumber,

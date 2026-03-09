@@ -37,6 +37,17 @@ describe('materializeEventEffects', () => {
 					finalityState: 'latest',
 				},
 			],
+			transactions: [
+				{
+					txHash: '0xerc20',
+					blockNumber: 100n,
+					txIndex: 0,
+					fromAddress: '0x1111111111111111111111111111111111111111',
+					toAddress: '0x2222222222222222222222222222222222222222',
+					valueWei: '100',
+					gasUsed: '21000',
+				},
+			],
 			logs: [
 				{
 					blockNumber: 100n,
@@ -95,6 +106,7 @@ describe('materializeEventEffects', () => {
 		expect(objects[0]).toMatchObject({
 			parentObjectId: 'block:1:100',
 			name: 'ERC-20 Transfer',
+			resourceReference: 'action://objects/blockhead-event-erc20.gltf',
 		})
 		expect(objects[0]?.metadataJson).toMatchObject({
 			entityKind: 'event',

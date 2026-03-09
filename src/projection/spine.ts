@@ -1,3 +1,5 @@
+import { blockResource, blockVisualScale, districtResource } from './resources.js'
+
 import type { ProjectedFabricState, ProjectionConfig, SpineBlock } from './types.js'
 
 const finalityBand = (finalityState: string) => (
@@ -35,11 +37,18 @@ const widthBucket = (logCount: number, gasUsed: string) => {
 		8
 }
 
-const transform = (blockNumber: bigint, windowStart: bigint, blockSpacing: number, finalityState: string) => ({
+const transform = (block: SpineBlock, windowStart: bigint, blockSpacing: number) => {
+	const scale = blockVisualScale({
+		txCount: block.txCount,
+		logCount: block.logCount,
+		gasUsed: block.gasUsed,
+	})
+
+	return {
 	position: {
 		x: 0,
-		y: finalityBand(finalityState),
-		z: Number(blockNumber - windowStart) * blockSpacing,
+		y: finalityBand(block.finalityState) + (scale.y / 2),
+		z: Number(block.blockNumber - windowStart) * blockSpacing,
 	},
 	rotation: {
 		x: 0,
@@ -48,11 +57,12 @@ const transform = (blockNumber: bigint, windowStart: bigint, blockSpacing: numbe
 		w: 1,
 	},
 	scale: {
-		x: 1,
-		y: 1,
-		z: 1,
+		x: scale.x,
+		y: scale.y,
+		z: scale.z,
 	},
-})
+	}
+}
 
 const blockMetadata = (chainId: bigint, block: SpineBlock) => ({
 	schemaVersion: 1,
@@ -159,8 +169,7 @@ export const materializeLatestSpine = (args: {
 					},
 				},
 				boundJson: null,
-				resourceReference: null,
-				resourceName: null,
+				...districtResource(),
 				metadataJson: entryMetadata(args.config.chainId, head.blockNumber),
 				deleted: false,
 				desiredRevision,
@@ -179,8 +188,8 @@ export const materializeLatestSpine = (args: {
 				transformJson: {
 					position: {
 						x: 0,
-						y: 0,
-						z: 0,
+						y: 1,
+						z: Math.max(12, ((args.blocks.length - 1) * args.config.spineBlockSpacing) / 2),
 					},
 					rotation: {
 						x: 0,
@@ -189,9 +198,9 @@ export const materializeLatestSpine = (args: {
 						w: 1,
 					},
 					scale: {
-						x: 1,
-						y: 1,
-						z: 1,
+						x: 28,
+						y: 2,
+						z: Math.max(18, args.blocks.length * args.config.spineBlockSpacing),
 					},
 				},
 				boundJson: {
@@ -199,8 +208,7 @@ export const materializeLatestSpine = (args: {
 					y: 8,
 					z: Math.max(12, args.blocks.length * args.config.spineBlockSpacing),
 				},
-				resourceReference: null,
-				resourceName: null,
+				...districtResource(),
 				metadataJson: containerMetadata(args.config.chainId, head.blockNumber),
 				deleted: false,
 				desiredRevision,
@@ -217,18 +225,16 @@ export const materializeLatestSpine = (args: {
 				subtype: 0,
 				name: `Block ${block.blockNumber.toString()}`,
 				transformJson: transform(
-					block.blockNumber,
+					block,
 					windowStart,
 					args.config.spineBlockSpacing,
-					block.finalityState,
 				),
 				boundJson: {
 					x: widthBucket(block.logCount, block.gasUsed),
 					y: 4,
 					z: depthBucket(block.txCount),
 				},
-				resourceReference: null,
-				resourceName: null,
+				...blockResource(block.finalityState),
 				metadataJson: blockMetadata(args.config.chainId, block),
 				deleted: false,
 				desiredRevision,

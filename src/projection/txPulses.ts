@@ -1,18 +1,12 @@
+import { blockScaleByNumber, selectTxPulseGroups, txPulseVisuals } from './blockActivityLayout.js'
+import { txResource } from './resources.js'
+
 import type {
 	ProjectedFabricObject,
 	ProjectionConfig,
 	SpineBlock,
 } from './types.js'
-
-type TxPulseInput = {
-	txHash: string
-	blockNumber: bigint
-	txIndex: number
-	fromAddress: string
-	toAddress: string | null
-	valueWei: string
-	gasUsed: string
-}
+import type { TxPulseInput } from './blockActivityLayout.js'
 
 const recentWindowSize = 32n
 
@@ -22,31 +16,6 @@ const shorten = (address: string | null) => (
 	:
 		`${address.slice(0, 8)}...${address.slice(-4)}`
 )
-
-const pulseTransform = (index: number) => ({
-	position: {
-		x: (index % 6) * 4 - 10,
-		y: 8 + Math.floor(index / 6) * 2,
-		z: 0,
-	},
-	rotation: {
-		x: 0,
-		y: 0,
-		z: 0,
-		w: 1,
-	},
-	scale: {
-		x: 1,
-		y: 1,
-		z: 1,
-	},
-})
-
-const pulseBounds = (valueWei: string, gasUsed: string) => ({
-	x: Math.max(2, Math.min(12, String(valueWei).length / 2)),
-	y: Math.max(2, Math.min(12, String(gasUsed).length / 2)),
-	z: 2,
-})
 
 const metadata = (chainId: bigint, tx: TxPulseInput) => ({
 	schemaVersion: 1,
@@ -74,55 +43,28 @@ export const materializeTxPulses = (args: {
 		'scope_eth_mainnet'
 	:
 		`scope_chain_${args.config.chainId.toString()}`
-	const recentBlockFloor = args.headBlockNumber >= recentWindowSize - 1n ?
-		args.headBlockNumber - (recentWindowSize - 1n)
-	:
-		0n
-	const recentBlockIds = new Set(
-		args.blocks
-			.filter(({ blockNumber }) => (
-				blockNumber >= recentBlockFloor
-			))
-			.map(({ blockNumber }) => (
-				blockNumber.toString()
-			)),
-	)
+	const blockScales = blockScaleByNumber(args.blocks)
 
-	const groupedTransactions = Array.from(
-		args.transactions
-			.filter(({ blockNumber }) => (
-				recentBlockIds.has(blockNumber.toString())
-			))
-			.reduce<Map<string, TxPulseInput[]>>((grouped, transaction) => {
-				const key = transaction.blockNumber.toString()
-				const current = grouped.get(key) ?? []
+	return selectTxPulseGroups({
+		config: args.config,
+		headBlockNumber: args.headBlockNumber,
+		blocks: args.blocks,
+		transactions: args.transactions,
+		recentWindowSize,
+	}).flatMap(({ blockNumber, transactions }) => (
+		transactions.map((transaction, index) => {
+			const visuals = txPulseVisuals({
+				blockScale: blockScales.get(blockNumber) ?? {
+					x: 10,
+					y: 6,
+					z: 10,
+				},
+				index,
+				count: transactions.length,
+				transaction,
+			})
 
-				current.push(transaction)
-				grouped.set(key, current)
-
-				return grouped
-			}, new Map())
-			.values(),
-	)
-
-	return groupedTransactions.flatMap((transactions) => (
-		[
-			...transactions,
-		]
-			.sort((left, right) => (
-				BigInt(right.valueWei) > BigInt(left.valueWei) ?
-					1
-				: BigInt(right.valueWei) < BigInt(left.valueWei) ?
-					-1
-				: BigInt(right.gasUsed) > BigInt(left.gasUsed) ?
-					1
-				: BigInt(right.gasUsed) < BigInt(left.gasUsed) ?
-					-1
-				:
-					left.txIndex - right.txIndex
-			))
-			.slice(0, args.config.maxTxPulsesPerBlock)
-			.map((transaction, index) => ({
+			return {
 				scopeId,
 				objectId: `tx:${args.config.chainId.toString()}:${transaction.txHash}`,
 				entrypointId: 'entry_latest_spine',
@@ -132,14 +74,23 @@ export const materializeTxPulses = (args: {
 				type: 0,
 				subtype: 0,
 				name: `Tx ${shorten(transaction.toAddress)}`,
-				transformJson: pulseTransform(index),
-				boundJson: pulseBounds(transaction.valueWei, transaction.gasUsed),
-				resourceReference: null,
-				resourceName: null,
+				transformJson: {
+					position: visuals.position,
+					rotation: {
+						x: 0,
+						y: 0,
+						z: 0,
+						w: 1,
+					},
+					scale: visuals.scale,
+				},
+				boundJson: visuals.scale,
+				...txResource(),
 				metadataJson: metadata(args.config.chainId, transaction),
 				deleted: false,
 				desiredRevision: args.headBlockNumber,
 				updatedAtBlock: transaction.blockNumber,
-			} satisfies ProjectedFabricObject))
+			} satisfies ProjectedFabricObject
+		})
 	))
 }

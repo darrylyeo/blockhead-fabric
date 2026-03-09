@@ -6,6 +6,12 @@ import type {
 	ProjectedFabricScope,
 	ProjectionConfig,
 } from './types.js'
+import {
+	contractResource,
+	districtResource,
+	magnitudeScale,
+	stateSurfaceResource,
+} from './resources.js'
 
 const childScopeId = (chainId: bigint, kind: string, address: string) => (
 	`scope_attachment_${chainId.toString()}_${kind.replaceAll('-', '_')}_${address.slice(2)}`
@@ -103,7 +109,7 @@ export const materializeAttachmentCandidates = (args: {
 			transformJson: {
 				position: {
 					x: 0,
-					y: 6,
+					y: 14,
 					z: 0,
 				},
 				rotation: {
@@ -113,15 +119,15 @@ export const materializeAttachmentCandidates = (args: {
 					w: 1,
 				},
 				scale: {
-					x: 1,
-					y: 1,
-					z: 1,
+					x: 5,
+					y: 5,
+					z: 5,
 				},
 			},
 			boundJson: {
-				x: 4,
-				y: 4,
-				z: 4,
+				x: 5,
+				y: 5,
+				z: 5,
 			},
 			resourceReference,
 			resourceName: 'attachment-inspect',
@@ -154,7 +160,7 @@ export const materializeAttachmentCandidates = (args: {
 			transformJson: {
 				position: {
 					x: 0,
-					y: 0,
+					y: 1,
 					z: 0,
 				},
 				rotation: {
@@ -164,9 +170,9 @@ export const materializeAttachmentCandidates = (args: {
 					w: 1,
 				},
 				scale: {
-					x: 1,
-					y: 1,
-					z: 1,
+					x: 120,
+					y: 2,
+					z: 120,
 				},
 			},
 			boundJson: {
@@ -174,8 +180,7 @@ export const materializeAttachmentCandidates = (args: {
 				y: 48,
 				z: 96,
 			},
-			resourceReference: null,
-			resourceName: null,
+			...districtResource(),
 			metadataJson: {
 				schemaVersion: 1,
 				entityId: `entry:inspect-attachment:${args.config.chainId.toString()}:${pool.address}`,
@@ -203,7 +208,7 @@ export const materializeAttachmentCandidates = (args: {
 			transformJson: {
 				position: {
 					x: 0,
-					y: 8,
+					y: 10,
 					z: 0,
 				},
 				rotation: {
@@ -213,9 +218,9 @@ export const materializeAttachmentCandidates = (args: {
 					w: 1,
 				},
 				scale: {
-					x: 2,
-					y: 2,
-					z: 2,
+					x: 16,
+					y: 12,
+					z: 16,
 				},
 			},
 			boundJson: {
@@ -223,8 +228,7 @@ export const materializeAttachmentCandidates = (args: {
 				y: 12,
 				z: 12,
 			},
-			resourceReference: null,
-			resourceName: 'amm-pool',
+			...contractResource(pool.familyLabel),
 			metadataJson: {
 				schemaVersion: 1,
 				entityId: pool.entityId,
@@ -255,7 +259,7 @@ export const materializeAttachmentCandidates = (args: {
 			transformJson: {
 				position: {
 					x: 0,
-					y: 0,
+					y: 1,
 					z: 28,
 				},
 				rotation: {
@@ -265,9 +269,9 @@ export const materializeAttachmentCandidates = (args: {
 					w: 1,
 				},
 				scale: {
-					x: 1,
-					y: 1,
-					z: 1,
+					x: 88,
+					y: 2,
+					z: 42,
 				},
 			},
 			boundJson: {
@@ -275,8 +279,7 @@ export const materializeAttachmentCandidates = (args: {
 				y: 24,
 				z: 32,
 			},
-			resourceReference: null,
-			resourceName: null,
+			...districtResource(),
 			metadataJson: {
 				schemaVersion: 1,
 				entityId: `container:inspect:surfaces:${args.config.chainId.toString()}:${pool.address}`,
@@ -323,7 +326,7 @@ export const materializeAttachmentCandidates = (args: {
 				transformJson: {
 					position: {
 						x: surface.x,
-						y: 6,
+						y: 2 + (magnitudeScale(surface.value, 0, 8, 3) * 3),
 						z: index * 2,
 					},
 					rotation: {
@@ -333,9 +336,9 @@ export const materializeAttachmentCandidates = (args: {
 						w: 1,
 					},
 					scale: {
-						x: 1,
-						y: 1,
-						z: 1,
+						x: 6,
+						y: 2 + (magnitudeScale(surface.value, 0, 8, 3) * 4),
+						z: 6,
 					},
 				},
 				boundJson: {
@@ -343,8 +346,7 @@ export const materializeAttachmentCandidates = (args: {
 					y: 10,
 					z: 10,
 				},
-				resourceReference: null,
-				resourceName: 'state-surface',
+				...stateSurfaceResource(surface.id),
 				metadataJson: {
 					schemaVersion: 1,
 					entityId: `surface:${pool.entityId}:${surface.id}`,

@@ -459,11 +459,40 @@ Use `resourceReference` and `resourceName` for:
 - generated corridor meshes
 - attachment links to child descriptor URLs
 
+### Current v1 visual asset strategy
+
+The current local publication path uses generated static GLTF assets served by the Fabric server from:
+
+- `action://objects/<asset>.gltf`
+
+These assets are intentionally simple solids so the world reads as a physical blockchain even in generic Fabric clients.
+
+Current visual families:
+
+- finalized block slice -> green block solid
+- safe block slice -> teal block solid
+- latest block slice -> blue block solid
+- district / large protocol pad -> dark slab
+- account anchor -> cyan cube
+- generic contract -> amber prism
+- ERC-20 landmark -> token-colored prism
+- NFT / multi-token landmark -> purple prism
+- AMM pool landmark -> aqua prism
+- native corridor -> gold beam
+- ERC-20 corridor -> cyan beam
+- contract-call corridor -> violet beam
+- tx pulse -> orange pillar
+- event effects -> family-colored small solids
+- state surfaces -> metric-colored bars
+
+Resource identity is therefore part of the client-visible scene contract for v1, not just optional decoration.
+
 ### Resource rules
 
-- resources are optional in v1
-- metadata-only publication is acceptable in desired state for some objects
-- complex generated assets should be produced outside the hot publication path
+- resources are expected for major published object families in v1
+- metadata-only publication remains acceptable only for secondary objects or degraded targets
+- generated assets should be deterministic and cheap to regenerate during local Fabric image build
+- `action://objects/...` should remain stable so compatible clients can cache them aggressively
 
 ## Attachments
 
@@ -566,6 +595,9 @@ Required:
 - recent canonical block slices
 - clear ordering along the spine
 - visible `latest` / `safe` / `finalized` distinction
+- tx pulses placed on or just above the owning block surface
+- event effects clustered around the tx pulse when that tx is materialized
+- block size should encode recent activity so dense blocks read as larger physical slices
 
 ### `district-atlas`
 
@@ -574,6 +606,9 @@ Required:
 - stable districts
 - stable placement for accounts and contracts
 - no frame-to-frame jitter under normal updates
+- districts centered on a coarse world grid rather than anchored from one corner
+- accounts and contracts spread across the full district footprint
+- corridors should read as explicit directional beams between districts
 
 ### `protocol-landmarks`
 
@@ -582,6 +617,8 @@ Required:
 - curated landmark hierarchy
 - stronger labels
 - meaningful deep-dive attachments where available
+- visually distinct landmark families for fungible tokens, NFT collections, and AMM pools
+- child surface bars or gauges that expose the current semantic state of important contracts
 
 ## Compatibility Targets
 
@@ -640,6 +677,7 @@ The scene protocol is good enough when:
 - desired-state metadata is sufficient to distinguish blocks, accounts, contracts, corridors, surfaces, and attachments, even if current upstream publication exposes only a subset without sidecars or a fork
 - a recent reorg can be represented through ordinary object mutations without inventing a public rollback protocol
 - initial client load shows a coherent world rather than a visibly bootstrapping scene
+- the major world structures use stable visual resources so a generic client can read the blockchain scene without blockhead-specific rendering code
 
 ## Implementation Status
 
@@ -649,6 +687,8 @@ The scene protocol is good enough when:
 - [x] Attachment contract fixed
 - [x] `latest-spine` hierarchy validated
 - [x] `district-atlas` hierarchy validated
+- [x] Deterministic visual resource vocabulary wired into projected objects
+- [x] Local Fabric wrapper emits generated `action://objects/*.gltf` assets for the blockhead scene
 - [x] Client compatibility validated with existing Fabric tooling (e2e root-descriptor check; Manifolder at http://localhost:3000/app.html?msf=http://localhost:2000/fabric loads hierarchy)
 - [x] Blockhead Fabric in Manifolder featured list (Blockhead Fabric (Local) → http://localhost:2000/fabric)
 - [x] Automated Manifolder E2E: `pnpm service:test:e2e:manifolder` validates fabric descriptor + Manifolder page load
@@ -662,6 +702,8 @@ The scene protocol is good enough when:
 - Metadata: `schemaVersion`, `entityId`, `entityKind`, `chainId`, `canonical`, `finalityState` (blocks), `updatedAtBlock`
 - Attachments: subtype `255`, `resourceReference` to child scope descriptor
 - Hierarchy: entry → container:spine → block → tx/event; entry → district → account/contract; corridors under source district; protocol-landmarks → containers (class 71) → contracts
+- Visual resources: generated `action://objects/*.gltf` assets now assigned to major object families
+- Landmark state: child `surface:*` objects now materialized for visible protocol landmarks and inspect scopes
 
 **Deviations:**
 - Corridor ID: impl uses `corridor:chainId:source:target:flowClass:tokenClass:window` (colons, includes window); spec example uses `corridor:1:d_ab|d_f4|erc20_transfer|usdc` (pipe in key)

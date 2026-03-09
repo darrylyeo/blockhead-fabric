@@ -69,10 +69,9 @@ describe('materializeLatestSpine', () => {
 			'block:1:101',
 		])
 		expect(projection.objects[0]?.parentObjectId).toBe('root')
-		expect(projection.objects[2]?.transformJson).toEqual({
+		expect(projection.objects[2]?.transformJson).toMatchObject({
 			position: {
 				x: 0,
-				y: 0,
 				z: 0,
 			},
 			rotation: {
@@ -81,16 +80,10 @@ describe('materializeLatestSpine', () => {
 				z: 0,
 				w: 1,
 			},
-			scale: {
-				x: 1,
-				y: 1,
-				z: 1,
-			},
 		})
-		expect(projection.objects[3]?.transformJson).toEqual({
+		expect(projection.objects[3]?.transformJson).toMatchObject({
 			position: {
 				x: 0,
-				y: 4,
 				z: 24,
 			},
 			rotation: {
@@ -99,17 +92,16 @@ describe('materializeLatestSpine', () => {
 				z: 0,
 				w: 1,
 			},
-			scale: {
-				x: 1,
-				y: 1,
-				z: 1,
-			},
 		})
+		expect((projection.objects[3]?.transformJson as { scale: { x: number, y: number, z: number } }).scale.x).toBeGreaterThan(10)
+		expect((projection.objects[3]?.transformJson as { scale: { x: number, y: number, z: number } }).scale.y).toBeGreaterThan(8)
 		expect(projection.objects[3]?.boundJson).toEqual({
 			x: 16,
 			y: 4,
 			z: 30,
 		})
+		expect(projection.objects[3]?.resourceReference).toBe('action://objects/blockhead-finalized.gltf')
+		expect(projection.objects[3]?.resourceName).toBe('blockhead-finalized.gltf')
 		expect(projection.objects[3]?.metadataJson).toMatchObject({
 			entityId: 'block:1:101',
 			entityKind: 'block',

@@ -193,6 +193,15 @@ describe('materializeProtocolLandmarks', () => {
 			objectId === 'container:protocol:amm_pool'
 		))?.name).toBe('AMM Pools')
 		expect(state.objects.find(({ objectId }) => (
+			objectId === 'container:protocol:erc20'
+		))?.resourceReference).toBe('action://objects/blockhead-district.gltf')
+		expect(state.objects.find(({ objectId }) => (
+			objectId === 'contract:1:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+		))?.resourceReference).toBe('action://objects/blockhead-token.gltf')
+		expect(state.objects.find(({ objectId }) => (
+			objectId === 'surface:contract:1:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48:activity_32'
+		))?.resourceReference).toBe('action://objects/blockhead-state-activity.gltf')
+		expect(state.objects.find(({ objectId }) => (
 			objectId === 'contract:1:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
 		))?.metadataJson).toMatchObject({
 			protocolLabel: 'USDC',
