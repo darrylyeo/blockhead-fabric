@@ -10,6 +10,8 @@ const config = {
 	maxTxPulsesPerBlock: 2,
 	spineBlockSpacing: 24,
 	districtSpacing: 256,
+	districtAtlasOffsetX: 512,
+	districtAtlasOffsetZ: 0,
 	slotSpacing: 12,
 	topContractLandmarksPerDistrict: 8,
 	projectionVersion: 1n,

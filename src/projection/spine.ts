@@ -37,17 +37,23 @@ const widthBucket = (logCount: number, gasUsed: string) => {
 		8
 }
 
+const heightFromActivity = (txCount: number, gasUsed: string) => (
+	blockVisualScale({
+		txCount,
+		logCount: 0,
+		gasUsed,
+	}).y
+)
+
 const transform = (block: SpineBlock, windowStart: bigint, blockSpacing: number) => {
-	const scale = blockVisualScale({
-		txCount: block.txCount,
-		logCount: block.logCount,
-		gasUsed: block.gasUsed,
-	})
+	const blockWidth = Math.min(widthBucket(block.logCount, block.gasUsed), 14)
+	const blockDepth = depthBucket(block.txCount)
+	const blockHeight = heightFromActivity(block.txCount, block.gasUsed)
 
 	return {
 	position: {
 		x: 0,
-		y: finalityBand(block.finalityState) + (scale.y / 2),
+		y: finalityBand(block.finalityState) + (blockHeight / 2),
 		z: Number(block.blockNumber - windowStart) * blockSpacing,
 	},
 	rotation: {
@@ -57,9 +63,9 @@ const transform = (block: SpineBlock, windowStart: bigint, blockSpacing: number)
 		w: 1,
 	},
 	scale: {
-		x: scale.x,
-		y: scale.y,
-		z: scale.z,
+		x: blockWidth,
+		y: blockHeight,
+		z: blockDepth,
 	},
 	}
 }
@@ -198,13 +204,13 @@ export const materializeLatestSpine = (args: {
 						w: 1,
 					},
 					scale: {
-						x: 28,
+						x: 14,
 						y: 2,
 						z: Math.max(18, args.blocks.length * args.config.spineBlockSpacing),
 					},
 				},
 				boundJson: {
-					x: 24,
+					x: 16,
 					y: 8,
 					z: Math.max(12, args.blocks.length * args.config.spineBlockSpacing),
 				},

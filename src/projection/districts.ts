@@ -88,10 +88,15 @@ const parseNibble = (value: string) => (
 	Number.parseInt(value, 16)
 )
 
-const districtOrigin = (districtKeyValue: string, districtSpacing: number) => ({
-	x: (parseNibble(districtKeyValue[0] ?? '0') * districtSpacing) + (districtSpacing / 2),
+const districtOrigin = (
+	districtKeyValue: string,
+	districtSpacing: number,
+	offsetX: number,
+	offsetZ: number,
+) => ({
+	x: offsetX + (parseNibble(districtKeyValue[0] ?? '0') * districtSpacing) + (districtSpacing / 2),
 	y: 0,
-	z: (parseNibble(districtKeyValue[1] ?? '0') * districtSpacing) + (districtSpacing / 2),
+	z: offsetZ + (parseNibble(districtKeyValue[1] ?? '0') * districtSpacing) + (districtSpacing / 2),
 })
 
 const slot = (address: string, slotSpacing: number) => {
@@ -197,7 +202,12 @@ export const materializeDistrictAtlas = (args: {
 		))
 		.map(([value, entities]) => {
 			const key = value.slice(2)
-			const origin = districtOrigin(key, args.config.districtSpacing)
+			const origin = districtOrigin(
+				key,
+				args.config.districtSpacing,
+				args.config.districtAtlasOffsetX,
+				args.config.districtAtlasOffsetZ,
+			)
 
 			return {
 				chainId: args.config.chainId,

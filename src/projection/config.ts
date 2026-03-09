@@ -41,6 +41,8 @@ export const loadProjectionConfig = (): ProjectionConfig => ({
 	maxTxPulsesPerBlock: getEnvNumber('MAX_TX_PULSES_PER_BLOCK', 24),
 	spineBlockSpacing: getEnvNumber('SPINE_BLOCK_SPACING', 24),
 	districtSpacing: getEnvNumber('DISTRICT_SPACING', 256),
+	districtAtlasOffsetX: getEnvNumber('DISTRICT_ATLAS_OFFSET_X', 512),
+	districtAtlasOffsetZ: getEnvNumber('DISTRICT_ATLAS_OFFSET_Z', 0),
 	slotSpacing: getEnvNumber('SLOT_SPACING', 12),
 	topContractLandmarksPerDistrict: getEnvNumber('TOP_CONTRACT_LANDMARKS_PER_DISTRICT', 8),
 	projectionVersion: getEnvBigInt('PROJECTION_VERSION', 1n),

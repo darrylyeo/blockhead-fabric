@@ -151,15 +151,16 @@ z = (n - windowStart) * blockSpacing
 Where `blockHeight` and the visible block footprint are derived deterministically from activity:
 
 ```text
-blockWidth  = f(logCount, gasUsed)
+blockWidth  = min(widthBucket(logCount, gasUsed), 14)   # capped for narrow spine
 blockHeight = f(txCount, gasUsed)
-blockDepth  = f(txCount)
+blockDepth  = depthBucket(txCount)
 ```
 
 Rule:
 
+- spine is long and narrow: all blocks at x = 0, block width capped so the line reads clearly
 - blocks should read as physical slices rather than zero-height markers
-- denser blocks should become visibly taller / wider
+- denser blocks should become visibly taller / deeper along the spine
 - finality remains encoded by both lane height and resource family
 
 Recommended finality bands:
@@ -296,19 +297,21 @@ Place persistent entities inside districts with stable positions.
 
 ### V1 district grid
 
-Map district IDs onto a coarse 16x16 world grid.
+Map district IDs onto a coarse 16x16 world grid, offset from the spine so the two areas do not overlap.
 
 Formula:
 
 ```text
-districtX = (parseHex(districtKey[0]) * DISTRICT_SPACING) + (DISTRICT_SPACING / 2)
-districtZ = (parseHex(districtKey[1]) * DISTRICT_SPACING) + (DISTRICT_SPACING / 2)
+districtX = DISTRICT_ATLAS_OFFSET_X + (parseHex(districtKey[0]) * DISTRICT_SPACING) + (DISTRICT_SPACING / 2)
+districtZ = DISTRICT_ATLAS_OFFSET_Z + (parseHex(districtKey[1]) * DISTRICT_SPACING) + (DISTRICT_SPACING / 2)
 districtOrigin = (districtX, 0, districtZ)
 ```
 
 Recommended:
 
 - `DISTRICT_SPACING = 256`
+- `DISTRICT_ATLAS_OFFSET_X = 512` so the district grid sits clearly to the right of the spine (x = 0)
+- `DISTRICT_ATLAS_OFFSET_Z = 0`
 
 ### V1 local slot placement
 

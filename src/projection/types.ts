@@ -8,6 +8,8 @@ export type ProjectionConfig = {
 	maxTxPulsesPerBlock: number
 	spineBlockSpacing: number
 	districtSpacing: number
+	districtAtlasOffsetX: number
+	districtAtlasOffsetZ: number
 	slotSpacing: number
 	topContractLandmarksPerDistrict: number
 	projectionVersion: bigint

@@ -13,6 +13,8 @@ describe('materializeLatestSpine', () => {
 				maxTxPulsesPerBlock: 24,
 				spineBlockSpacing: 24,
 				districtSpacing: 256,
+				districtAtlasOffsetX: 512,
+				districtAtlasOffsetZ: 0,
 				slotSpacing: 12,
 				topContractLandmarksPerDistrict: 8,
 				projectionVersion: 1n,
@@ -93,7 +95,8 @@ describe('materializeLatestSpine', () => {
 				w: 1,
 			},
 		})
-		expect((projection.objects[3]?.transformJson as { scale: { x: number, y: number, z: number } }).scale.x).toBeGreaterThan(10)
+		expect((projection.objects[3]?.transformJson as { scale: { x: number, y: number, z: number } }).scale.x).toBeLessThanOrEqual(14)
+		expect((projection.objects[3]?.transformJson as { scale: { x: number, y: number, z: number } }).scale.x).toBeGreaterThanOrEqual(8)
 		expect((projection.objects[3]?.transformJson as { scale: { x: number, y: number, z: number } }).scale.y).toBeGreaterThan(8)
 		expect(projection.objects[3]?.boundJson).toEqual({
 			x: 16,
@@ -124,6 +127,8 @@ describe('materializeLatestSpine', () => {
 				maxTxPulsesPerBlock: 24,
 				spineBlockSpacing: 24,
 				districtSpacing: 256,
+				districtAtlasOffsetX: 512,
+				districtAtlasOffsetZ: 0,
 				slotSpacing: 12,
 				topContractLandmarksPerDistrict: 8,
 				projectionVersion: 1n,
